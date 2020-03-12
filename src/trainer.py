@@ -8,12 +8,12 @@ from ignite.contrib.handlers.tensorboard_logger import *
 from ignite.handlers import Checkpoint, DiskSaver
 
 
-def prepare_batch_lstm(batch, device=None, non_blocking=None):
+def prepare_batch_lstm(batch, device=None, non_blocking=None, num_classes=64):
 
 	actions = batch['actions']
 	# actions = torch.from_numpy(actions).to(device).to(torch.int64)
 	actions = actions.to(device).to(torch.int64)
-	actions = F.one_hot(actions).float()
+	actions = F.one_hot(actions, num_classes=64).float()
 	target = actions[:,1:]
 	actions = actions[:,:-1]
 
@@ -85,12 +85,14 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 
 
 def create_supervised_evaluator_lstm(
-	prepare_batch,
 	model: torch.nn.Module,
+	prepare_batch,
+	criterion,
 	metrics = None,
 	device = None,
 	non_blocking: bool = False,
 	output_transform = lambda x, y, y_pred: (y_pred, y,),
+	log_dir='output/log/',
 ) -> Engine:
 
 	if device:
@@ -100,15 +102,35 @@ def create_supervised_evaluator_lstm(
 		model.eval()
 		with torch.no_grad():
 			actions, target = prepare_batch(batch, device=device, non_blocking=non_blocking)
-			y_pred = model(x)
-			# y_pred = y_pred.max(dim=1)
-			# y_pred = F.one_hot(y_pred).float()
+			y_pred = model(actions)
+			y_pred = y_pred.max(dim=2)[1]
+			y_pred = F.one_hot(y_pred, num_classes=target.shape[2]).float()
 			# return output_transform(x, y, y_pred)
 			return (y_pred, target)
 
 	engine = Engine(_inference)
 
-	for name, metric in metrics.items():
-		metric.attach(engine, name)
+	# for name, metric in metrics.items():
+	# 	metric.attach(engine, name)
+
+	Loss(criterion, output_transform=lambda x: x).attach(engine, 'loss')
+
+	pbar = ProgressBar(persist=True)
+	pbar.attach(engine)
+
+	# Tensorboard logging
+	tb_logger = TensorboardLogger(log_dir=log_dir)
+	tb_logger.attach(
+		engine,
+		log_handler=OutputHandler(
+			tag="validation",metric_names="all"
+		),
+		event_name=Events.EPOCH_COMPLETED,
+	)
+
+	@engine.on(Events.EPOCH_COMPLETED)
+	def log_validation_results(engine):
+		metrics = engine.state.metrics
+		print(f"Validation Results - Epoch: {engine.state.epoch}  Avg loss: {metrics['loss']:.6f}")
 
 	return engine
