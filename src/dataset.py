@@ -1,10 +1,40 @@
 import numpy as np
+import pandas as pd
 
 import torch
 from torch.utils.data.dataset import Dataset
 from torch.utils.data.sampler import SubsetRandomSampler
 
 class CertDataset(Dataset):
+
+	@staticmethod
+	def prepare_dataset(pkl_file, answers_csv, min_length, max_length, dataset_version='4.2'):
+		# TODO: drop weekends and holidays
+
+		df = pd.read_pickle(pkl_file)
+		df = df.reset_index().dropna()
+
+		main_df = pd.read_csv(answers_csv)
+		main_df = main_df[main_df['dataset'] == dataset_version].drop(['dataset', 'details'], axis=1)
+
+		main_df['start'] = pd.to_datetime(main_df['start'], format='%m/%d/%Y %H:%M:%S')
+		main_df['end'] = pd.to_datetime(main_df['end'], format='%m/%d/%Y %H:%M:%S')
+
+		df = df.merge(main_df, left_on='user', right_on='user', how='left')
+		df['malicious'] = (df.day >= df.start) & (df.day <= df.end)
+		df = df.drop(['start', 'end', 'day', 'user'], axis=1)
+
+		df['action_length'] = df.action_id.apply(len)
+
+		df = df[df.action_length < min_length]
+
+		df['action_id'] = df.action_id.apply(lambda x: x[:max_length])
+		df['action_id'] = df.action_id.apply(lambda x: x + [0] * (max_length - len(x)))
+
+		actions = np.vstack(df.action_id.values)
+		targets = df.malicious.values
+
+		return actions, targets
 
 	def __init__(self, actions, targets, transform=None):
 
