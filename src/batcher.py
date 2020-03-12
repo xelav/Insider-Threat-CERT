@@ -1,41 +1,51 @@
 import numpy as np
 
-class CertBatcher:
-	def __init__(self, actions, malicious, seed=0, batch_size=16):
+import torch
+from torch.utils.data.dataset import Dataset
+from torch.utils.data.sampler import SubsetRandomSampler
+
+class CertDataset(Dataset):
+
+	def __init__(self, actions, targets, transform=None):
 
 		self.actions = actions
-		self.malicious = malicious
+		self.targets = targets.astype(int)
+		self.transform = transform
 
-		self.num_items = actions.shape[0]
-
-		self.indices = np.arange(self.num_items)
-		self.batch_size = batch_size
-		self.rnd = np.random.RandomState(seed)
-		self.rnd.shuffle(self.indices)
-		self.ptr = 0
-		self.bi = 0  # batch index
-
-	def __iter__(self):
-		# self._reset()
-		return self
-	
 	def __len__(self):
-		return self.num_items // self.batch_size
-	
-	def _reset(self):
-		self.rnd.shuffle(self.indices)
-		self.ptr = 0
-		self.bi = 0
-		
-	def __next__(self):
-		if self.ptr + self.batch_size > self.num_items:
-			# self._reset()
-			raise StopIteration()
+		return len(self.actions)
 
-		if self.bi >= 10:
-			raise StopIteration()
-		current_indecies = self.indices[self.ptr:self.ptr+self.batch_size]
-		result = (self.actions[current_indecies], self.malicious[current_indecies])
-		self.ptr += self.batch_size
-		self.bi += 1
-		return result
+	def __getitem__(self, idx):
+
+		if torch.is_tensor(idx):
+			idx = idx.tolist()
+
+		sample = {'actions': self.actions[idx], 'targets': self.targets[idx]}
+
+		if self.transform:
+			sample = self.transform(sample)
+
+		return sample
+
+
+def create_data_loaders(dataset, shuffle_dataset=True, validation_split=0.3, batch_size=16, random_seed=0):
+
+    # Creating data indices for training and validation splits:
+    dataset_size = len(dataset)
+    indices = list(range(dataset_size))
+    split = int(np.floor(validation_split * dataset_size))
+    if shuffle_dataset:
+        np.random.seed(random_seed)
+        np.random.shuffle(indices)
+    train_indices, val_indices = indices[split:], indices[:split]
+
+    # Creating PT data samplers and loaders:
+    train_sampler = SubsetRandomSampler(train_indices)
+    valid_sampler = SubsetRandomSampler(val_indices)
+
+    train_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, 
+                                               sampler=train_sampler)
+    validation_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
+                                                    sampler=valid_sampler)
+    
+    return train_loader, validation_loader

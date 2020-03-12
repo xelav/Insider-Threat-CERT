@@ -10,8 +10,9 @@ from ignite.handlers import Checkpoint, DiskSaver
 
 def prepare_batch_lstm(batch, device=None, non_blocking=None):
 
-	actions, _ = batch
-	actions = torch.from_numpy(actions).to(device).to(torch.int64)
+	actions = batch['actions']
+	# actions = torch.from_numpy(actions).to(device).to(torch.int64)
+	actions = actions.to(device).to(torch.int64)
 	actions = F.one_hot(actions).float()
 	target = actions[:,1:]
 	actions = actions[:,:-1]
@@ -54,9 +55,25 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 	tb_logger.attach(
 		engine,
 		log_handler=OutputHandler(
-			tag="training", output_transform=lambda x: {"batchloss": x['loss']}, metric_names="all"
+			tag="training", output_transform=lambda x: {"batch_loss": x['loss']}, metric_names="all"
 		),
 		event_name=Events.ITERATION_COMPLETED(every=1),
+	)
+	tb_logger.attach(
+		engine,
+		log_handler=GradsScalarHandler(model, reduction=torch.norm, tag="training/grads"),
+		event_name=Events.ITERATION_COMPLETED(every=100)
+	)
+	tb_logger.attach(
+		engine,
+		log_handler=GradsHistHandler(model, tag="training/grads"),
+		event_name=Events.ITERATION_COMPLETED(every=100))
+	tb_logger.attach(
+		engine,
+		log_handler=OutputHandler(
+			tag="training", output_transform=lambda x: {"epoch_loss": x['loss']}
+		),
+		event_name=Events.EPOCH_COMPLETED,
 	)
 
 	# Checkpoint saving
@@ -69,11 +86,11 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 
 def create_supervised_evaluator_lstm(
 	prepare_batch,
-    model: torch.nn.Module,
-    metrics = None,
-    device = None,
-    non_blocking: bool = False,
-    output_transform = lambda x, y, y_pred: (y_pred, y,),
+	model: torch.nn.Module,
+	metrics = None,
+	device = None,
+	non_blocking: bool = False,
+	output_transform = lambda x, y, y_pred: (y_pred, y,),
 ) -> Engine:
 
 	if device:
