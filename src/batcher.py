@@ -16,7 +16,7 @@ class CertBatcher:
 		self.bi = 0  # batch index
 
 	def __iter__(self):
-		self._reset()
+		# self._reset()
 		return self
 	
 	def __len__(self):
@@ -30,6 +30,9 @@ class CertBatcher:
 	def __next__(self):
 		if self.ptr + self.batch_size > self.num_items:
 			# self._reset()
+			raise StopIteration()
+
+		if self.bi >= 10:
 			raise StopIteration()
 		current_indecies = self.indices[self.ptr:self.ptr+self.batch_size]
 		result = (self.actions[current_indecies], self.malicious[current_indecies])
