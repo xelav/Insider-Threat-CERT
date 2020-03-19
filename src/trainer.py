@@ -8,16 +8,19 @@ from ignite.contrib.handlers.tensorboard_logger import *
 from ignite.handlers import Checkpoint, DiskSaver
 
 
-def prepare_batch_lstm(batch, device=None, non_blocking=None, num_classes=64):
+def prepare_batch_lstm(batch, device=None, non_blocking=None, num_classes=64, train=True):
 
 	actions = batch['actions']
 	# actions = torch.from_numpy(actions).to(device).to(torch.int64)
 	actions = actions.to(device).to(torch.int64)
 	actions = F.one_hot(actions, num_classes=64).float()
-	target = actions[:,1:]
-	actions = actions[:,:-1]
+	if train:
+		target = actions[:,1:]
+		actions = actions[:,:-1]
 
-	return actions, target
+		return actions, target
+	else:
+		return actions, batch['targets']
 
 
 def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, metrics={},
@@ -33,6 +36,9 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 		actions, target = prepare_batch(batch, device=device)
 
 		scores = model(actions)
+		
+		scores = scores.transpose(1,2)
+		target = target.max(dim=2)[1]
 		
 		loss = criterion(scores, target)
 		loss.backward()
@@ -62,12 +68,12 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 	tb_logger.attach(
 		engine,
 		log_handler=GradsScalarHandler(model, reduction=torch.norm, tag="training/grads"),
-		event_name=Events.ITERATION_COMPLETED(every=100)
+		event_name=Events.ITERATION_COMPLETED(every=50)
 	)
 	tb_logger.attach(
 		engine,
 		log_handler=GradsHistHandler(model, tag="training/grads"),
-		event_name=Events.ITERATION_COMPLETED(every=100))
+		event_name=Events.ITERATION_COMPLETED(every=50))
 	tb_logger.attach(
 		engine,
 		log_handler=OutputHandler(
@@ -113,24 +119,29 @@ def create_supervised_evaluator_lstm(
 	# for name, metric in metrics.items():
 	# 	metric.attach(engine, name)
 
-	Loss(criterion, output_transform=lambda x: x).attach(engine, 'loss')
+	Loss(
+		criterion, output_transform=lambda x: x
+	).attach(engine, 'loss')
+	Accuracy(
+		output_transform=lambda x: (x[0].transpose(1,2).contiguous(), x[1].transpose(1,2).contiguous())
+	).attach(engine, 'accuracy')
 
 	pbar = ProgressBar(persist=True)
 	pbar.attach(engine)
 
 	# Tensorboard logging
-	tb_logger = TensorboardLogger(log_dir=log_dir)
-	tb_logger.attach(
-		engine,
-		log_handler=OutputHandler(
-			tag="validation",metric_names="all"
-		),
-		event_name=Events.EPOCH_COMPLETED,
-	)
+	# tb_logger = TensorboardLogger(log_dir=log_dir)
+	# tb_logger.attach(
+	# 	engine,
+	# 	log_handler=OutputHandler(
+	# 		tag="validation",metric_names="all"
+	# 	),
+	# 	event_name=Events.EPOCH_COMPLETED,
+	# )
 
 	@engine.on(Events.EPOCH_COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
-		print(f"Validation Results - Epoch: {engine.state.epoch}  Avg loss: {metrics['loss']:.6f}")
+		print(f"Validation Results - Epoch: {engine.state.epoch}  Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}")
 
 	return engine

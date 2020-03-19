@@ -9,7 +9,7 @@ from torch import autograd
 
 class LSTM_Encoder(nn.Module):
 	
-	def __init__(self, params):
+	def __init__(self, params, train_mode=True):
 		super(LSTM_Encoder, self).__init__()
 
 		self.lstm_encoder = nn.LSTM(
@@ -44,16 +44,18 @@ class CNN_Classifier(nn.Module):
 		super(CNN_Classifier, self).__init__()
 		# TODO: use sigmoid on matrix element-wise
 
-		self.conv1 = nn.Conv2d(1, params['conv1_filters'], kernel_size=params['conv1_kernel_size'])
+		self.conv1 = nn.Conv2d(1, params['conv1_filters'], kernel_size=params['conv1_kernel_size'], padding=2)
 		self.maxpool1 = nn.MaxPool2d(2, stride=2)
-		self.conv2 = nn.Conv2d(params['conv1_filters'], params['conv2_filters'], kernel_size=params['conv2_kernel_size'])
+		self.conv2 = nn.Conv2d(params['conv1_filters'], params['conv2_filters'],
+			kernel_size=params['conv2_kernel_size'], padding=2)
 		self.maxpool2 = nn.MaxPool2d(2, stride=2)
 
 		self.flatten = nn.Flatten()
-		self.linear = nn.Linear(params['conv2_filters']*params['max_seq_length']*params['lstm_hidden_size']//16, params, 2)
-		self.softmax = nn.Softmax()
+		self.linear = nn.Linear(params['conv2_filters']*params['max_seq_length']*params['lstm_hidden_size']//16, 2)
+		self.softmax = nn.Softmax(dim=1)
 
 	def forward(self, x):
+		# TODO: sigmoid
 
 		# TODO
 		assert(x.shape)
@@ -67,19 +69,23 @@ class CNN_Classifier(nn.Module):
 		x = self.linear(x)
 		x = self.softmax(x)
 
+		return x
+
 class InsiderClassifier(nn.Module):
 
 	def __init__(self, params):
 		super(InsiderClassifier, self).__init__()
 
-		self.lstm_encoder = LSTM_Encoder(self, params['lstm_encoder'])
-		self.cnn_classifier = CNN_Classifier(self, params['cnn_classifier'])
+		self.lstm_encoder = LSTM_Encoder(params['lstm_encoder'])
+		self.lstm_encoder.requires_grad = False
+
+		self.sigmoid = nn.Sigmoid()
+		self.cnn_classifier = CNN_Classifier(params['cnn_classifier'])
 
 	def forward(self, x):
 		"""
 		x : batch of sequences of action tokens. All of them should be greater than minimum length and truncated
 		"""
-		# TODO: throw out small sequences
-		# TODO: truncate big sequences
 		hidden_state = self.lstm_encoder(x)
+		hidden_state = self.sigmoid(hidden_state)
 		scores = self.cnn_classifier(hidden_state)
