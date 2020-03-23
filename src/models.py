@@ -17,8 +17,8 @@ class LSTM_Encoder(nn.Module):
 			num_layers=params['num_layers'], dropout=params['dropout'], batch_first=True)
 		self.dropout = nn.Dropout(params['dropout'])
 		self.decoder = nn.Linear(params['hidden_size'], params['input_size'])
-		self.softmax = nn.Softmax(dim=2)
-		# self.loss = nn.BCELoss()
+		self.log_softmax = nn.LogSoftmax(dim=2)
+		# self.loss = nn.NLLLoss()
 
 	def forward(self, sequence):
 	
@@ -29,7 +29,7 @@ class LSTM_Encoder(nn.Module):
 		if self.training:
 			x = self.dropout(x)
 			x = self.decoder(x)
-			x = self.softmax(x)
+			x = self.log_softmax(x)
 
 			# target = self.one_hot_encoder(sequence[:,:-1]).float()
 			# loss = self.loss(x[:,1:], target)
@@ -108,8 +108,9 @@ class InsiderClassifier(nn.Module):
 		x : batch of sequences of action tokens. All of them
 		should be greater than minimum length and truncated
 		"""
-		hidden_state = self.lstm_encoder(x)
-		hidden_state = self.sigmoid(hidden_state)
+		with torch.no_grad():
+			hidden_state = self.lstm_encoder(x)
+			hidden_state = self.sigmoid(hidden_state)
 		scores = self.cnn_classifier(hidden_state[:,None])
 
 		return scores

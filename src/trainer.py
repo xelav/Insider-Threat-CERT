@@ -105,14 +105,17 @@ def create_supervised_evaluator_lstm(
 		model.to(device)
 
 	def _inference(engine, batch):
-		model.eval()
+		model.train()
 		with torch.no_grad():
 			actions, target = prepare_batch(batch, device=device, non_blocking=non_blocking)
-			y_pred = model(actions)
-			y_pred = y_pred.max(dim=2)[1]
-			y_pred = F.one_hot(y_pred, num_classes=target.shape[2]).float()
+			scores = model(actions)
+
+			scores = scores.transpose(1,2)
+			target = target.max(dim=2)[1]
+			# y_pred = y_pred.max(dim=2)[1]
+			# y_pred = F.one_hot(y_pred, num_classes=target.shape[2]).float()
 			# return output_transform(x, y, y_pred)
-			return (y_pred, target)
+			return (scores, target)
 
 	engine = Engine(_inference)
 
@@ -123,25 +126,26 @@ def create_supervised_evaluator_lstm(
 		criterion, output_transform=lambda x: x
 	).attach(engine, 'loss')
 	Accuracy(
-		output_transform=lambda x: (x[0].transpose(1,2).contiguous(), x[1].transpose(1,2).contiguous())
+		# output_transform=lambda x: (x[0].transpose(1,2).contiguous(), x[1].transpose(1,2).contiguous())
+		output_transform=lambda x: x
 	).attach(engine, 'accuracy')
 
 	pbar = ProgressBar(persist=True)
 	pbar.attach(engine)
 
 	# Tensorboard logging
-	# tb_logger = TensorboardLogger(log_dir=log_dir)
-	# tb_logger.attach(
-	# 	engine,
-	# 	log_handler=OutputHandler(
-	# 		tag="validation",metric_names="all"
-	# 	),
-	# 	event_name=Events.EPOCH_COMPLETED,
-	# )
+	tb_logger = TensorboardLogger(log_dir=log_dir)
+	tb_logger.attach(
+		engine,
+		log_handler=OutputHandler(
+			tag="validation",metric_names="all"
+		),
+		event_name=Events.EPOCH_COMPLETED,
+	)
 
 	@engine.on(Events.EPOCH_COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
-		print(f"Validation Results - Epoch: {engine.state.epoch}  Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}")
+		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}")
 
 	return engine
