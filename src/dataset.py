@@ -15,7 +15,8 @@ class CertDataset(Dataset):
 		df = df.reset_index().dropna()
 
 		main_df = pd.read_csv(answers_csv)
-		main_df = main_df[main_df['dataset'] == dataset_version].drop(['dataset', 'details'], axis=1)
+		main_df = main_df[main_df['dataset'].astype(str) == str(dataset_version)]\
+			.drop(['dataset', 'details'], axis=1)
 
 		main_df['start'] = pd.to_datetime(main_df['start'], format='%m/%d/%Y %H:%M:%S')
 		main_df['end'] = pd.to_datetime(main_df['end'], format='%m/%d/%Y %H:%M:%S')
@@ -60,22 +61,22 @@ class CertDataset(Dataset):
 
 def create_data_loaders(dataset, shuffle_dataset=True, validation_split=0.3, batch_size=16, random_seed=0):
 
-    # Creating data indices for training and validation splits:
-    dataset_size = len(dataset)
-    indices = list(range(dataset_size))
-    split = int(np.floor(validation_split * dataset_size))
-    if shuffle_dataset:
-        np.random.seed(random_seed)
-        np.random.shuffle(indices)
-    train_indices, val_indices = indices[split:], indices[:split]
+	# Creating data indices for training and validation splits:
+	dataset_size = len(dataset)
+	indices = list(range(dataset_size))
+	split = int(np.floor(validation_split * dataset_size))
+	if shuffle_dataset:
+		np.random.seed(random_seed)
+		np.random.shuffle(indices)
+	train_indices, val_indices = indices[split:], indices[:split]
 
-    # Creating PT data samplers and loaders:
-    train_sampler = SubsetRandomSampler(train_indices)
-    valid_sampler = SubsetRandomSampler(val_indices)
+	# Creating PT data samplers and loaders:
+	train_sampler = SubsetRandomSampler(train_indices)
+	valid_sampler = SubsetRandomSampler(val_indices)
 
-    train_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, 
-                                               sampler=train_sampler)
-    validation_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
-                                                    sampler=valid_sampler)
-    
-    return train_loader, validation_loader
+	train_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, 
+											   sampler=train_sampler)
+	validation_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
+													sampler=valid_sampler)
+	
+	return train_loader, validation_loader
