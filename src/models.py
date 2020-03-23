@@ -52,15 +52,15 @@ class CNN_Classifier(nn.Module):
 			kernel_size=params['conv2_kernel_size'], padding=params['conv2_kernel_size']//2)
 		self.maxpool2 = nn.MaxPool2d(2, stride=2)
 
-		self.flatten = nn.Flatten()
+		self.flatten = lambda x: x.view(x.size(0),-1) # not nn.Flatten because of compatability issue
 		self.linear = nn.Linear(params['conv2_filters']*self.seq_length*self.lstm_hidden_size//16, 2)
 		self.softmax = nn.Softmax(dim=1)
 
 	def forward(self, x):
 
 		# assert(len(x.shape)==4)
-		# assert(x.shape[2] == self.seq_length)
-		# assert(x.shape[3] == self.lstm_hidden_size)
+		assert(x.shape[2] == self.seq_length)
+		assert(x.shape[3] == self.lstm_hidden_size)
 
 		x = self.conv1(x)
 		x = self.maxpool1(x)

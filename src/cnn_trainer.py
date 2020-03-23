@@ -8,22 +8,16 @@ from ignite.contrib.handlers.tensorboard_logger import *
 from ignite.handlers import Checkpoint, DiskSaver
 
 
-def prepare_batch_lstm(batch, device=None, non_blocking=None, num_classes=64, train=True):
+def prepare_batch(batch, device=None, non_blocking=None, num_classes=64):
 
 	actions = batch['actions']
-	# actions = torch.from_numpy(actions).to(device).to(torch.int64)
 	actions = actions.to(device).to(torch.int64)
+	targets = batch['targets'].to(device).float()
 	actions = F.one_hot(actions, num_classes=64).float()
-	if train:
-		target = actions[:,1:]
-		actions = actions[:,:-1]
-
-		return actions, target
-	else:
-		return actions, batch['targets']
+	return actions, targets
 
 
-def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, metrics={},
+def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metrics={},
 		device=None,
 		log_dir='output/log/',
 		checkpoint_dir='output/checkpoints/',
@@ -39,10 +33,7 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 
 		scores = model(actions)
 		
-		scores = scores.transpose(1,2)
-		target = target.max(dim=2)[1]
-		
-		loss = criterion(scores, target)
+		loss = criterion(scores[:,0], target)
 		loss.backward()
 		optimizer.step()
 
@@ -105,7 +96,7 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 	return engine
 
 
-def create_supervised_evaluator_lstm(
+def create_supervised_evaluator(
 	model: torch.nn.Module,
 	prepare_batch,
 	criterion,
@@ -120,29 +111,20 @@ def create_supervised_evaluator_lstm(
 		model.to(device)
 
 	def _inference(engine, batch):
-		model.train()
+		model.eval()
 		with torch.no_grad():
 			actions, target = prepare_batch(batch, device=device, non_blocking=non_blocking)
-			scores = model(actions)
-
-			scores = scores.transpose(1,2)
-			target = target.max(dim=2)[1]
-			# y_pred = y_pred.max(dim=2)[1]
-			# y_pred = F.one_hot(y_pred, num_classes=target.shape[2]).float()
-			# return output_transform(x, y, y_pred)
+			scores = model(actions)[:, 0]
 			return (scores, target)
 
 	engine = Engine(_inference)
-
-	# for name, metric in metrics.items():
-	# 	metric.attach(engine, name)
 
 	Loss(
 		criterion, output_transform=lambda x: x
 	).attach(engine, 'loss')
 	Accuracy(
 		# output_transform=lambda x: (x[0].transpose(1,2).contiguous(), x[1].transpose(1,2).contiguous())
-		output_transform=lambda x: x
+		output_transform=lambda x: (x[0] > 0.5, x[1])
 	).attach(engine, 'accuracy')
 
 	pbar = ProgressBar(persist=True)
