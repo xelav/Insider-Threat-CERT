@@ -8,20 +8,27 @@ from ignite.contrib.handlers.tensorboard_logger import *
 from ignite.handlers import Checkpoint, DiskSaver
 
 
-def prepare_batch(batch, device=None, non_blocking=None, num_classes=64):
+def prepare_batch_lstm(batch, device=None, non_blocking=None, num_classes=64, train=True):
 
 	actions = batch['actions']
 	# actions = torch.from_numpy(actions).to(device).to(torch.int64)
 	actions = actions.to(device).to(torch.int64)
-	targets = batch['targets'].to(device).float()
 	actions = F.one_hot(actions, num_classes=64).float()
-	return actions, targets
+	if train:
+		target = actions[:,1:]
+		actions = actions[:,:-1]
+
+		return actions, target
+	else:
+		return actions, batch['targets']
 
 
-def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metrics={},
+def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, metrics={},
 		device=None,
 		log_dir='output/log/',
-		checkpoint_dir='output/checkpoints/'
+		checkpoint_dir='output/checkpoints/',
+		checkpoint_every=1000,
+		tensorboard_every=50,
 	) -> Engine:
 
 	def _update(engine, batch):
@@ -32,7 +39,10 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 
 		scores = model(actions)
 		
-		loss = criterion(scores[:,0], target)
+		scores = scores.transpose(1,2)
+		target = target.max(dim=2)[1]
+		
+		loss = criterion(scores, target)
 		loss.backward()
 		optimizer.step()
 
@@ -45,44 +55,57 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 	RunningAverage(output_transform=lambda x: x['loss']).attach(engine, 'average_loss')
 
 	# TQDM
-	pbar = ProgressBar(persist=True)
+	pbar = ProgressBar(
+		persist=True,
+		bar_format='{desc}[{n_fmt}/{total_fmt}] {percentage:8.0f}%|{bar}{postfix} [{elapsed}<{remaining}]',
+	)
 	pbar.attach(engine, ['average_loss'])
 
 	# Tensorboard logging
-	tb_logger = TensorboardLogger(log_dir=log_dir)
+	tb_logger = TensorboardLogger(log_dir=log_dir + '/train')
 	tb_logger.attach(
 		engine,
 		log_handler=OutputHandler(
-			tag="training", output_transform=lambda x: {"batch_loss": x['loss']}, metric_names="all"
+			tag="metrics", output_transform=lambda x: {"batch_loss": x['loss']}, metric_names="all"
 		),
 		event_name=Events.ITERATION_COMPLETED(every=1),
 	)
 	tb_logger.attach(
 		engine,
-		log_handler=GradsScalarHandler(model, reduction=torch.norm, tag="training/grads"),
-		event_name=Events.ITERATION_COMPLETED(every=50)
+		log_handler=GradsScalarHandler(model, reduction=torch.norm, tag="grads"),
+		event_name=Events.ITERATION_COMPLETED(every=tensorboard_every)
 	)
 	tb_logger.attach(
 		engine,
-		log_handler=GradsHistHandler(model, tag="training/grads"),
-		event_name=Events.ITERATION_COMPLETED(every=50))
+		log_handler=GradsHistHandler(model, tag="grads"),
+		event_name=Events.ITERATION_COMPLETED(every=tensorboard_every))
 	tb_logger.attach(
 		engine,
 		log_handler=OutputHandler(
-			tag="training", output_transform=lambda x: {"epoch_loss": x['loss']}
+			tag="metrics",
+			output_transform=lambda x: {"epoch_loss": x['loss']},
+			global_step_transform=global_step_from_engine(engine),
 		),
 		event_name=Events.EPOCH_COMPLETED,
 	)
 
 	# Checkpoint saving
 	to_save = {'model': model, 'optimizer': optimizer, 'engine': engine}
-	handler = Checkpoint(to_save, DiskSaver(checkpoint_dir, create_dir=True), n_saved=3)
-	engine.add_event_handler(Events.ITERATION_COMPLETED(every=1000), handler)
+	checkpoint_handler = Checkpoint(to_save, DiskSaver(checkpoint_dir, create_dir=True), n_saved=3)
+	final_checkpoint_handler = Checkpoint(
+		{'model': model},
+		DiskSaver(checkpoint_dir, create_dir=True),
+		n_saved=None,
+		filename_prefix='final'
+	)
+
+	engine.add_event_handler(Events.ITERATION_COMPLETED(every=checkpoint_every), checkpoint_handler)
+	engine.add_event_handler(Events.COMPLETED, final_checkpoint_handler)
 
 	return engine
 
 
-def create_supervised_evaluator(
+def create_supervised_evaluator_lstm(
 	model: torch.nn.Module,
 	prepare_batch,
 	criterion,
@@ -97,14 +120,17 @@ def create_supervised_evaluator(
 		model.to(device)
 
 	def _inference(engine, batch):
-		model.eval()
+		model.train()
 		with torch.no_grad():
 			actions, target = prepare_batch(batch, device=device, non_blocking=non_blocking)
-			y_pred = model(actions)
-			y_pred = y_pred.max(dim=2)[1]
-			y_pred = F.one_hot(y_pred, num_classes=target.shape[2]).float()
+			scores = model(actions)
+
+			scores = scores.transpose(1,2)
+			target = target.max(dim=2)[1]
+			# y_pred = y_pred.max(dim=2)[1]
+			# y_pred = F.one_hot(y_pred, num_classes=target.shape[2]).float()
 			# return output_transform(x, y, y_pred)
-			return (y_pred, target)
+			return (scores, target)
 
 	engine = Engine(_inference)
 
@@ -115,25 +141,28 @@ def create_supervised_evaluator(
 		criterion, output_transform=lambda x: x
 	).attach(engine, 'loss')
 	Accuracy(
-		output_transform=lambda x: (x[0].transpose(1,2).contiguous(), x[1].transpose(1,2).contiguous())
+		# output_transform=lambda x: (x[0].transpose(1,2).contiguous(), x[1].transpose(1,2).contiguous())
+		output_transform=lambda x: x
 	).attach(engine, 'accuracy')
 
 	pbar = ProgressBar(persist=True)
 	pbar.attach(engine)
 
 	# Tensorboard logging
-	# tb_logger = TensorboardLogger(log_dir=log_dir)
-	# tb_logger.attach(
-	# 	engine,
-	# 	log_handler=OutputHandler(
-	# 		tag="validation",metric_names="all"
-	# 	),
-	# 	event_name=Events.EPOCH_COMPLETED,
-	# )
+	tb_logger = TensorboardLogger(log_dir=log_dir + '/validation')
+	tb_logger.attach(
+		engine,
+		log_handler=OutputHandler(
+			tag="validation",
+			metric_names="all",
+			global_step_transform=lambda x, y : engine.train_epoch,
+		),
+		event_name=Events.EPOCH_COMPLETED,
+	)
 
-	@engine.on(Events.EPOCH_COMPLETED)
+	@engine.on(Events.COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
-		print(f"Validation Results - Epoch: {engine.state.epoch}  Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}")
+		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}")
 
 	return engine
