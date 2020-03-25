@@ -12,7 +12,7 @@ def prepare_batch(batch, device=None, non_blocking=None, num_classes=64):
 
 	actions = batch['actions']
 	actions = actions.to(device).to(torch.int64)
-	targets = batch['targets'].to(device).float()
+	targets = batch['targets'].to(device).long()
 	actions = F.one_hot(actions, num_classes=64).float()
 	return actions, targets
 
@@ -33,7 +33,7 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 
 		scores = model(actions)
 		
-		loss = criterion(scores[:,0], target)
+		loss = criterion(scores, target.long())
 		loss.backward()
 		optimizer.step()
 
@@ -114,13 +114,13 @@ def create_supervised_evaluator(
 		model.eval()
 		with torch.no_grad():
 			actions, target = prepare_batch(batch, device=device, non_blocking=non_blocking)
-			scores = model(actions)[:, 0]
+			scores = model(actions)
 			return (scores, target)
 
 	engine = Engine(_inference)
 
 	Loss(
-		criterion, output_transform=lambda x: x
+		criterion, output_transform=lambda x: x,
 	).attach(engine, 'loss')
 	Accuracy(
 		# output_transform=lambda x: (x[0].transpose(1,2).contiguous(), x[1].transpose(1,2).contiguous())

@@ -6,6 +6,35 @@ from ignite.metrics import Accuracy, Loss, RunningAverage, Metric
 from ignite.contrib.handlers.tqdm_logger import ProgressBar
 from ignite.contrib.handlers.tensorboard_logger import *
 from ignite.handlers import Checkpoint, DiskSaver
+from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
+
+
+class AccuracyIgnoringPadding(Accuracy):
+	"""
+	Same accuracy metric except that it
+	ignores single class in calculations.
+	This is neccessary so that the metric
+	is not overly optimistic
+	"""
+
+	def __init__(self, ignored_class, *args, **kwargs):
+		self.ignored_class = ignored_class
+		super(Accuracy, self).__init__(*args, **kwargs)
+
+	@reinit__is_reduced
+	def update(self, output):
+		y_pred, y = output
+
+		indices = torch.argmax(y_pred, dim=1)
+
+		mask = (y != self.ignored_class)
+		mask &= (indices != self.ignored_class)
+		y = y[mask]
+		indices = indices[mask]
+		correct = torch.eq(indices, y).view(-1)
+
+		self._num_correct += torch.sum(correct).item()
+		self._num_examples += correct.shape[0]
 
 
 def prepare_batch_lstm(batch, device=None, non_blocking=None, num_classes=64, train=True):
@@ -134,17 +163,14 @@ def create_supervised_evaluator_lstm(
 
 	engine = Engine(_inference)
 
-	# for name, metric in metrics.items():
-	# 	metric.attach(engine, name)
-
+	# Metrics
 	Loss(
 		criterion, output_transform=lambda x: x
 	).attach(engine, 'loss')
-	Accuracy(
-		# output_transform=lambda x: (x[0].transpose(1,2).contiguous(), x[1].transpose(1,2).contiguous())
-		output_transform=lambda x: x
-	).attach(engine, 'accuracy')
+	Accuracy().attach(engine, 'accuracy')
+	AccuracyIgnoringPadding(ignored_class=0).attach(engine, 'non_pad_accuracy')
 
+	# TQDM
 	pbar = ProgressBar(persist=True)
 	pbar.attach(engine)
 
@@ -163,6 +189,6 @@ def create_supervised_evaluator_lstm(
 	@engine.on(Events.COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
-		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}")
+		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, Non-Pad-Accuracy: {metrics['non_pad_accuracy']:.6f}")
 
 	return engine

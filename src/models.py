@@ -54,7 +54,7 @@ class CNN_Classifier(nn.Module):
 
 		self.flatten = lambda x: x.view(x.size(0),-1) # not nn.Flatten because of compatability issue
 		self.linear = nn.Linear(params['conv2_filters']*self.seq_length*self.lstm_hidden_size//16, 2)
-		self.softmax = nn.Softmax(dim=1)
+		self.softmax = nn.LogSoftmax(dim=1)
 
 	def forward(self, x):
 
@@ -69,7 +69,7 @@ class CNN_Classifier(nn.Module):
 
 		x = self.flatten(x)
 		x = self.linear(x)
-		x = self.softmax(x)
+		# x = self.softmax(x)
 
 		return x
 
