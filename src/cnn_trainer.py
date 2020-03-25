@@ -6,6 +6,7 @@ from ignite.metrics import Accuracy, Loss, RunningAverage, Metric
 from ignite.contrib.handlers.tqdm_logger import ProgressBar
 from ignite.contrib.handlers.tensorboard_logger import *
 from ignite.handlers import Checkpoint, DiskSaver
+from ignite.contrib.metrics import ROC_AUC
 
 
 def prepare_batch(batch, device=None, non_blocking=None, num_classes=64):
@@ -126,6 +127,9 @@ def create_supervised_evaluator(
 		# output_transform=lambda x: (x[0].transpose(1,2).contiguous(), x[1].transpose(1,2).contiguous())
 		output_transform=lambda x: (x[0] > 0.5, x[1])
 	).attach(engine, 'accuracy')
+	ROC_AUC(
+		output_transform=lambda x: (F.softmax(x[0], dim=1)[:,1], x[1])
+	).attach(engine, 'roc_auc')
 
 	pbar = ProgressBar(persist=True)
 	pbar.attach(engine)
@@ -145,6 +149,6 @@ def create_supervised_evaluator(
 	@engine.on(Events.COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
-		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}")
+		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, ROC AUC: {metrics['roc_auc']:.6f}")
 
 	return engine
