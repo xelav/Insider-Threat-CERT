@@ -136,7 +136,7 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 	@engine.on(Events.EPOCH_COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
-		print(f"Epoch results - Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, Non-Pad-Accuracy: {metrics['non_pad_accuracy']:.6f}")
+		print(f"Epoch results - Avg loss: {metrics['average_loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, Non-Pad-Accuracy: {metrics['non_pad_accuracy']:.6f}")
 
 	return engine
 

@@ -14,7 +14,7 @@ def prepare_batch(batch, device=None, non_blocking=None, num_classes=64):
 	actions = batch['actions']
 	actions = actions.to(device).to(torch.int64)
 	targets = batch['targets'].to(device).long()
-	actions = F.one_hot(actions, num_classes=64).float()
+	# actions = F.one_hot(actions, num_classes=64).float()
 	return actions, targets
 
 
@@ -34,7 +34,7 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 
 		scores = model(actions)
 		
-		loss = criterion(scores, target.long())
+		loss = criterion(scores, target)
 		loss.backward()
 		optimizer.step()
 
