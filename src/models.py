@@ -22,6 +22,8 @@ class LSTM_Encoder(nn.Module):
 				padding_idx=padding_idx)
 			lstm_input_size = params['embedding_size']
 
+		self.one_hot_encoder = F.one_hot
+		
 		self.lstm_encoder = nn.LSTM(
 			lstm_input_size, params['hidden_size'],
 			num_layers=params['num_layers'], dropout=params['dropout'], batch_first=True)
@@ -60,6 +62,9 @@ class LSTM_Encoder(nn.Module):
 		
 
 class CNN_Classifier(nn.Module):
+	"""
+	Implied nn.CrossEntropyLoss for training
+	"""
 
 	def __init__(self, params):
 		super(CNN_Classifier, self).__init__()
