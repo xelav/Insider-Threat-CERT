@@ -125,7 +125,7 @@ def create_supervised_evaluator(
 	).attach(engine, 'loss')
 	Accuracy(
 		# output_transform=lambda x: (x[0].transpose(1,2).contiguous(), x[1].transpose(1,2).contiguous())
-		output_transform=lambda x: (x[0] > 0.5, x[1])
+		output_transform=lambda x: ((F.softmax(x[0], dim=1) > 0.5).long(), x[1])
 	).attach(engine, 'accuracy')
 	ROC_AUC(
 		output_transform=lambda x: (F.softmax(x[0], dim=1)[:,1], x[1])

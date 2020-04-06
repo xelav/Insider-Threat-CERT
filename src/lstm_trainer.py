@@ -196,6 +196,6 @@ def create_supervised_evaluator_lstm(
 	@engine.on(Events.COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
-		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, Non-Pad-Accuracy: {metrics['non_pad_accuracy']:.6f}")
+		print(f"Validation Results - Avg loss: {metrics['average_loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, Non-Pad-Accuracy: {metrics['non_pad_accuracy']:.6f}")
 
 	return engine
