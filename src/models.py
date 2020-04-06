@@ -9,11 +9,21 @@ from torch import autograd
 
 class LSTM_Encoder(nn.Module):
 	
-	def __init__(self, params):
+	def __init__(self, params, padding_idx=None):
 		super(LSTM_Encoder, self).__init__()
 
+		self.input_size = params['input_size']
+
+		self.embedding = None
+		lstm_input_size = params['input_size']
+		if params['embedding_size'] and params['embedding_size'] > 0:
+			self.embedding = nn.Embedding(params['input_size'],
+				params['embedding_size'],
+				padding_idx=padding_idx)
+			lstm_input_size = params['embedding_size']
+
 		self.lstm_encoder = nn.LSTM(
-			params['input_size'], params['hidden_size'],
+			lstm_input_size, params['hidden_size'],
 			num_layers=params['num_layers'], dropout=params['dropout'], batch_first=True)
 		self.dropout = nn.Dropout(params['dropout'])
 		self.decoder = nn.Linear(params['hidden_size'], params['input_size'])
@@ -21,10 +31,21 @@ class LSTM_Encoder(nn.Module):
 		# self.loss = nn.NLLLoss()
 
 	def forward(self, sequence):
-	
+		"""
+		Input Args:
+		* sequence - tensor of indecies with shape (batch_size, seq_len)
+		Output:
+		If model in train mode:
+			tensor in shape (batch_size, seq_len-1, input_size)
+		If model in eval mode:
+			tensor in shape (batch_size, seq_len, hidden size)
+		"""
 
-		# x = self.one_hot_encoder(sequence).float()
-		x, _ = self.lstm_encoder(sequence)
+		if self.embedding:
+			x = self.embedding(sequence)
+		else:
+			x = self.one_hot_encoder(sequence, num_classes=self.input_size).float()
+		x, _ = self.lstm_encoder(x)
 
 		if self.training:
 			x = self.dropout(x)

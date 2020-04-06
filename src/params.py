@@ -20,6 +20,7 @@ def get_params():
 			'lstm_encoder': {
 				'input_size': 64, # gets from num_classes
 				'hidden_size': 40,
+				'embedding_size': 40, # None or negative value to disable embedding layer
 				'num_layers': 3,
 				'dropout': 0.5,
 			},

@@ -42,7 +42,7 @@ def prepare_batch_lstm(batch, device=None, non_blocking=None, num_classes=64, tr
 	actions = batch['actions']
 	# actions = torch.from_numpy(actions).to(device).to(torch.int64)
 	actions = actions.to(device).to(torch.int64)
-	actions = F.one_hot(actions, num_classes=64).float()
+	# actions = F.one_hot(actions, num_classes=64).float()
 	if train:
 		target = actions[:,1:]
 		actions = actions[:,:-1]
@@ -69,19 +69,21 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 		scores = model(actions)
 		
 		scores = scores.transpose(1,2)
-		target = target.max(dim=2)[1]
+		# target = target.max(dim=2)[1]
 		
 		loss = criterion(scores, target)
 		loss.backward()
 		optimizer.step()
 
-		return {'loss': loss.item(), 'y_pred': scores, 'y_true': target}
+		return {'loss': loss.item(), 'y_pred': scores, 'y': target}
 
 	model.to(device)
 	engine = Engine(_update)
 
 	# Metrics
 	RunningAverage(output_transform=lambda x: x['loss']).attach(engine, 'average_loss')
+	Accuracy().attach(engine, 'accuracy')
+	AccuracyIgnoringPadding(ignored_class=0).attach(engine, 'non_pad_accuracy')
 
 	# TQDM
 	pbar = ProgressBar(
@@ -131,6 +133,11 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 	engine.add_event_handler(Events.ITERATION_COMPLETED(every=checkpoint_every), checkpoint_handler)
 	engine.add_event_handler(Events.COMPLETED, final_checkpoint_handler)
 
+	@engine.on(Events.EPOCH_COMPLETED)
+	def log_validation_results(engine):
+		metrics = engine.state.metrics
+		print(f"Epoch results - Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, Non-Pad-Accuracy: {metrics['non_pad_accuracy']:.6f}")
+
 	return engine
 
 
@@ -155,7 +162,7 @@ def create_supervised_evaluator_lstm(
 			scores = model(actions)
 
 			scores = scores.transpose(1,2)
-			target = target.max(dim=2)[1]
+			# target = target.max(dim=2)[1]
 			# y_pred = y_pred.max(dim=2)[1]
 			# y_pred = F.one_hot(y_pred, num_classes=target.shape[2]).float()
 			# return output_transform(x, y, y_pred)
