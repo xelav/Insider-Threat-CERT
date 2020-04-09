@@ -9,7 +9,7 @@ from torch import autograd
 
 class LSTM_Encoder(nn.Module):
 	
-	def __init__(self, params, padding_idx=None):
+	def __init__(self, params, padding_idx=None, lm_train_mode=False):
 		super(LSTM_Encoder, self).__init__()
 
 		self.input_size = params['input_size']
@@ -32,6 +32,8 @@ class LSTM_Encoder(nn.Module):
 		self.log_softmax = nn.LogSoftmax(dim=2)
 		# self.loss = nn.NLLLoss()
 
+		self.lm_train_mode = lm_train_mode
+
 	def forward(self, sequence):
 		"""
 		Input Args:
@@ -49,7 +51,7 @@ class LSTM_Encoder(nn.Module):
 			x = self.one_hot_encoder(sequence, num_classes=self.input_size).float()
 		x, _ = self.lstm_encoder(x)
 
-		if self.training:
+		if self.lm_train_mode:
 			x = self.dropout(x)
 			x = self.decoder(x)
 			x = self.log_softmax(x)
@@ -101,26 +103,16 @@ class CNN_Classifier(nn.Module):
 
 class InsiderClassifier(nn.Module):
 
-	def __init__(self, params, lstm_checkpoint):
+	def __init__(self, params, lstm_checkpoint=None):
 		super(InsiderClassifier, self).__init__()
 
-		self.lstm_encoder = LSTM_Encoder(params['lstm_encoder'])
-		self.lstm_encoder.requires_grad = False
-		self.lstm_encoder.eval()
-		self.load_encoder(lstm_checkpoint)
+		self.lstm_encoder = LSTM_Encoder(params['lstm_encoder'], lm_train_mode=True)
+		if lstm_checkpoint:
+			self.lstm_encoder.requires_grad = False
+			self.load_encoder(lstm_checkpoint)
 
 		self.sigmoid = nn.Sigmoid()
 		self.cnn_classifier = CNN_Classifier(params['cnn_classifier'])
-
-	def train(self, mode=True):
-		"""
-		Customized train method. It restricts setting
-		lstm_encoder to train mode
-		"""
-		self.training = mode
-		self.sigmoid.train(mode)
-		self.cnn_classifier.train(mode)
-		return self
 
 	# FIXME: device
 	def load_encoder(self, checkpoint, device='cpu'):
@@ -134,9 +126,10 @@ class InsiderClassifier(nn.Module):
 		x : batch of sequences of action tokens. All of them
 		should be greater than minimum length and truncated
 		"""
-		with torch.no_grad():
-			hidden_state = self.lstm_encoder(x)
-			hidden_state = self.sigmoid(hidden_state)
+
+		hidden_state = self.lstm_encoder(x)
+		hidden_state = self.sigmoid(hidden_state)
+
 		scores = self.cnn_classifier(hidden_state[:,None])
 
 		return scores
