@@ -54,6 +54,7 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 	pbar.attach(engine, ['average_loss'])
 
 	# Tensorboard logging
+	# scalars logging
 	tb_logger = TensorboardLogger(log_dir=log_dir + '/train')
 	tb_logger.attach(
 		engine,
@@ -64,15 +65,6 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 	)
 	tb_logger.attach(
 		engine,
-		log_handler=GradsScalarHandler(model, reduction=torch.norm, tag="grads"),
-		event_name=Events.ITERATION_COMPLETED(every=tensorboard_every)
-	)
-	tb_logger.attach(
-		engine,
-		log_handler=GradsHistHandler(model, tag="grads"),
-		event_name=Events.ITERATION_COMPLETED(every=tensorboard_every))
-	tb_logger.attach(
-		engine,
 		log_handler=OutputHandler(
 			tag="metrics",
 			output_transform=lambda x: {"epoch_loss": x['loss']},
@@ -80,6 +72,16 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 		),
 		event_name=Events.EPOCH_COMPLETED,
 	)
+	# grads logging
+	tb_logger.attach(
+		engine,
+		log_handler=GradsScalarHandler(model, reduction=torch.norm, tag="grads"),
+		event_name=Events.ITERATION_COMPLETED(every=tensorboard_every)
+	)
+	tb_logger.attach(
+		engine,
+		log_handler=GradsHistHandler(model, tag="grads"),
+		event_name=Events.ITERATION_COMPLETED(every=tensorboard_every))
 
 	# Checkpoint saving
 	to_save = {'model': model, 'optimizer': optimizer, 'engine': engine}

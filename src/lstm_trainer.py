@@ -56,7 +56,7 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 		device=None,
 		log_dir='output/log/',
 		checkpoint_dir='output/checkpoints/',
-		checkpoint_every=1000,
+		checkpoint_every=None,
 		tensorboard_every=50,
 	) -> Engine:
 
@@ -88,7 +88,6 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 	# TQDM
 	pbar = ProgressBar(
 		persist=True,
-		bar_format='{desc}[{n_fmt}/{total_fmt}] {percentage:8.0f}%|{bar}{postfix} [{elapsed}<{remaining}]',
 	)
 	pbar.attach(engine, ['average_loss'])
 
@@ -130,7 +129,11 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 		filename_prefix='final'
 	)
 
-	engine.add_event_handler(Events.ITERATION_COMPLETED(every=checkpoint_every), checkpoint_handler)
+	if checkpoint_every:
+		e = Events.ITERATION_COMPLETED(every=checkpoint_every)
+	else:
+		e = Events.EPOCH_COMPLETED
+	engine.add_event_handler(e, checkpoint_handler)
 	engine.add_event_handler(Events.COMPLETED, final_checkpoint_handler)
 
 	@engine.on(Events.EPOCH_COMPLETED)
@@ -150,6 +153,7 @@ def create_supervised_evaluator_lstm(
 	non_blocking: bool = False,
 	output_transform = lambda x, y, y_pred: (y_pred, y,),
 	log_dir='output/log/',
+	checkpoint_dir='output/checkpoints/',
 ) -> Engine:
 
 	if device:
@@ -193,9 +197,23 @@ def create_supervised_evaluator_lstm(
 		event_name=Events.EPOCH_COMPLETED,
 	)
 
+	# save the best model
+	to_save = {'model': model}
+	best_checkpoint_handler = Checkpoint(
+		to_save,
+		DiskSaver(checkpoint_dir, create_dir=True),
+		n_saved=None, 
+		filename_prefix='best',
+		score_function=engine.state.metrics['loss'],
+		score_name="val_loss",
+		global_step_transform=lambda x, y : engine.train_epoch)
+	engine.add_event_handler(Events.COMPLETED, best_checkpoint_handler)
+
 	@engine.on(Events.COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
 		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, Non-Pad-Accuracy: {metrics['non_pad_accuracy']:.6f}")
+
+
 
 	return engine
