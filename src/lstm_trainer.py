@@ -96,10 +96,23 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 	tb_logger.attach(
 		engine,
 		log_handler=OutputHandler(
-			tag="metrics", output_transform=lambda x: {"batch_loss": x['loss']}, metric_names="all"
+			tag="train",
+            output_transform=lambda x: {"batch_loss": x['loss']},
+            metric_names=['average_loss'],
 		),
 		event_name=Events.ITERATION_COMPLETED(every=1),
 	)
+	tb_logger.attach(
+		engine,
+		log_handler=OutputHandler(
+			tag="train",
+			output_transform=lambda x: {"epoch_loss": x['loss']},
+            metric_names=['non_pad_accuracy', 'accuracy'],
+			global_step_transform=global_step_from_engine(engine),
+		),
+		event_name=Events.EPOCH_COMPLETED,
+	)
+
 	tb_logger.attach(
 		engine,
 		log_handler=GradsScalarHandler(model, reduction=torch.norm, tag="grads"),
@@ -109,15 +122,7 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 		engine,
 		log_handler=GradsHistHandler(model, tag="grads"),
 		event_name=Events.ITERATION_COMPLETED(every=tensorboard_every))
-	tb_logger.attach(
-		engine,
-		log_handler=OutputHandler(
-			tag="metrics",
-			output_transform=lambda x: {"epoch_loss": x['loss']},
-			global_step_transform=global_step_from_engine(engine),
-		),
-		event_name=Events.EPOCH_COMPLETED,
-	)
+	
 
 	# Checkpoint saving
 	to_save = {'model': model, 'optimizer': optimizer, 'engine': engine}
@@ -177,7 +182,7 @@ def create_supervised_evaluator_lstm(
 	# Metrics
 	Loss(
 		criterion, output_transform=lambda x: x
-	).attach(engine, 'loss')
+	).attach(engine, 'epoch_loss')
 	Accuracy().attach(engine, 'accuracy')
 	AccuracyIgnoringPadding(ignored_class=0).attach(engine, 'non_pad_accuracy')
 
@@ -202,10 +207,10 @@ def create_supervised_evaluator_lstm(
 	best_checkpoint_handler = Checkpoint(
 		to_save,
 		DiskSaver(checkpoint_dir, create_dir=True),
-		n_saved=None, 
+		n_saved=1, 
 		filename_prefix='best',
-		score_function=engine.state.metrics['loss'],
-		score_name="val_loss",
+		score_function=lambda x: engine.state.metrics['non_pad_accuracy'],
+		score_name="non_pad_accuracy",
 		global_step_transform=lambda x, y : engine.train_epoch)
 	engine.add_event_handler(Events.COMPLETED, best_checkpoint_handler)
 
