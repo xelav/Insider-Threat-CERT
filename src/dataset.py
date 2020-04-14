@@ -9,7 +9,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 class CertDataset(Dataset):
 
 	@staticmethod
-	def prepare_dataset(pkl_file, answers_csv, min_length, max_length, dataset_version='4.2'):
+	def prepare_dataset(pkl_file, answers_csv, min_length, max_length, padding_id=0, dataset_version='4.2'):
 		# TODO: drop weekends and holidays
 
 		df = pd.read_pickle(pkl_file)
@@ -31,7 +31,7 @@ class CertDataset(Dataset):
 		df = df[df.action_length < min_length]
 
 		df['action_id'] = df.action_id.apply(lambda x: x[:max_length])
-		df['action_id'] = df.action_id.apply(lambda x: x + [0] * (max_length - len(x)))
+		df['action_id'] = df.action_id.apply(lambda x: x + [padding_id] * (max_length - len(x)))
 
 		actions = np.vstack(df.action_id.values)
 		targets = df.malicious.values
@@ -113,19 +113,18 @@ class SkipGramDataset(Dataset):
 		self.padding_id = padding_id
 
 		padding_tail = [padding_id] * window_size
-		self.actions = padding_tail + self.actions + padding_tail
+		self.actions = padding_tail + self.actions + padding_tail * 2
 
 	def __len__(self):
-		return len(self.actions)
+		return len(self.actions) - self.window_size * 3
 
 	def __getitem__(self, idx):
 
 		if torch.is_tensor(idx):
 			idx = idx.tolist()
 
-		contexts = np.array([self.actions[i:i+2*w+1] for i in idx])
-		centers = contexts[:, w] # get the center of each window
-		contexts = np.delete(contexts, w, 1) # remove center indecies
+		contexts = np.array(self.actions[idx:idx+2*self.window_size])
+		centers = contexts[self.window_size] # get the center of each window
+		contexts = np.delete(contexts, self.window_size) # remove center indecies
 		
-		
-		return contexts, centers
+		return {'context': contexts, 'center': centers}

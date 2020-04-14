@@ -17,10 +17,15 @@ def create_supervised_trainer_skipgram(model, optimizer, prepare_batch, metrics=
 		tensorboard_every=50,
 	) -> Engine:
 
+	def _prepare_batch(batch):
+
+		return batch
+
 	def _update(engine, batch):
 		model.train()
 		optimizer.zero_grad()
 
+		batch = _prepare_batch(batch)
 		batch_loss = model._loss(batch)
 		loss = batch_loss.mean()
 
@@ -58,3 +63,4 @@ def create_supervised_trainer_skipgram(model, optimizer, prepare_batch, metrics=
 		print(f"Epoch results - Avg loss: {metrics['average_loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, Non-Pad-Accuracy: {metrics['non_pad_accuracy']:.6f}")
 
 	return engine
+

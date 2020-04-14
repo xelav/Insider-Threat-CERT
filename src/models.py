@@ -170,9 +170,14 @@ class SkipGram(nn.Module):
 
 	def __init__(self, vocab_size, embedding_dim):
 		super(SkipGram, self).__init__()
+
+		self.vocab_size = vocab_size
+		self.embedding_dim = embedding_dim
 		
 		self.embed = torch.nn.Embedding(vocab_size, embedding_dim)
 		nn.init.xavier_normal_(self.embed.weight)
+
+		self.eta = 1e-15 # for numeric stability
 
 	def forward(self, x):
 	
@@ -181,22 +186,25 @@ class SkipGram(nn.Module):
 	def _loss(self, batch):
 
 		target, center = batch
-
-		center = torch.from_numpy(center).type(torch.LongTensor).to(device)
-		target = torch.from_numpy(target).type(torch.LongTensor).to(device)
+		center = center.long()
+		target = target.long()
 		
 		center = F.embedding(center, self.embed.weight)
 		target = F.embedding(target, self.embed.weight)
 		
 		# also:
-		# denominator = (target @ self.embed.weight.t()).exp().sum(2)
-		denominator = torch.einsum("ijk, zk -> ijz", target, self.embed.weight).exp().sum(2)
+		# denominator = (center @ self.embed.weight.t()).exp().sum(1)
+		denominator = torch.einsum("ij, kj -> ik", center, self.embed.weight).exp().sum(1)
 		
 		# also:
 		# numerator = torch.matmul(center[:,None], target.permute(0,2,1)).squeeze().exp().sum(1)
 		numerator = torch.einsum('ij, izj -> iz', center, target).exp().sum(1)
 		
-		batch_loss = (numerator[:,None] / denominator).log().sum(1) / (- target.shape[1])
+		# it's heavily butchered to solve the problem of negative loss
+		batch_loss = (numerator / denominator + self.eta).mean()
+    
+		if (batch_loss < 0):
+			raise ValueError
 
 		return batch_loss
 	
