@@ -162,3 +162,77 @@ class InsiderClassifier(nn.Module):
 		scores = self.cnn_classifier(hidden_state[:,None])
 
 		return scores
+
+class SkipGram(nn.Module):
+	"""
+	Class for trainig symbol-level embeddings
+	"""
+
+	def __init__(self, vocab_size, embedding_dim):
+		super(SkipGram, self).__init__()
+		
+		self.embed = torch.nn.Embedding(vocab_size, embedding_dim)
+		nn.init.xavier_normal_(self.embed.weight)
+
+	def forward(self, x):
+	
+		return F.embedding(x, self.embed.weight)
+
+	def _loss(self, batch):
+
+		target, center = batch
+
+		center = torch.from_numpy(center).type(torch.LongTensor).to(device)
+		target = torch.from_numpy(target).type(torch.LongTensor).to(device)
+		
+		center = F.embedding(center, self.embed.weight)
+		target = F.embedding(target, self.embed.weight)
+		
+		# also:
+		# denominator = (target @ self.embed.weight.t()).exp().sum(2)
+		denominator = torch.einsum("ijk, zk -> ijz", target, self.embed.weight).exp().sum(2)
+		
+		# also:
+		# numerator = torch.matmul(center[:,None], target.permute(0,2,1)).squeeze().exp().sum(1)
+		numerator = torch.einsum('ij, izj -> iz', center, target).exp().sum(1)
+		
+		batch_loss = (numerator[:,None] / denominator).log().sum(1) / (- target.shape[1])
+
+		return batch_loss
+	
+	def _epoch_train(self, batcher, lr, device):
+	
+		optimizer = optim.SGD(self.parameters(), lr=lr)
+
+		loss_history = []
+		
+		pbar = tqdm(enumerate(batcher), leave=False, total=len(batcher))
+		for i, batch in pbar:
+			
+			batch_loss = self._loss(batch)
+			
+			loss_history.append(batch_loss.mean())
+			pbar.set_description('L:{0:.4f}'.format(batch_loss.mean()))
+			
+			optimizer.zero_grad()
+
+			batch_loss.sum().backward(retain_graph=True)
+			optimizer.step()
+		
+		return loss_history
+
+	def train_process(self, batcher, num_epochs=1, lr=0.001, device='cuda'):
+		
+		self.to(device)
+		self.train()
+		
+		overall_loss_history = dict()
+		
+		for i in range(num_epochs):
+			print("EPOCH ", i)
+			loss_history = self._epoch_train(batcher, lr, device)
+			overall_loss_history[i] = loss_history
+			
+			torch.save(overall_loss_history, 'loss.log')
+			
+		return overall_loss_history

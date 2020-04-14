@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import itertools
 
 import torch
 from torch.utils.data.dataset import Dataset
@@ -80,3 +81,51 @@ def create_data_loaders(dataset, shuffle_dataset=True, validation_split=0.3, bat
 													sampler=valid_sampler)
 	
 	return train_loader, validation_loader
+
+class SkipGramDataset(Dataset):
+
+	@staticmethod
+	def prepare_dataset(pkl_file, min_length, dataset_version='4.2'):
+		"""
+		Returns simple flat list of action ids
+		"""
+
+		df = pd.read_pickle(pkl_file)
+		df = df.reset_index().dropna()
+		df = df.sort_values(['user', 'day'])
+
+		# filter out small sequences
+		df['action_length'] = df.action_id.apply(len)
+		df = df[df.action_length < min_length]
+
+		actions = df['action_id'].values.tolist()
+		# flatten list of lists
+		actions = list(itertools.chain.from_iterable(actions))
+
+		return actions
+		
+
+	def __init__(self, actions, window_size=3, padding_id=0, transform=None):
+
+		self.actions = actions
+		self.transform = transform
+		self.window_size = window_size
+		self.padding_id = padding_id
+
+		padding_tail = [padding_id] * window_size
+		self.actions = padding_tail + self.actions + padding_tail
+
+	def __len__(self):
+		return len(self.actions)
+
+	def __getitem__(self, idx):
+
+		if torch.is_tensor(idx):
+			idx = idx.tolist()
+
+		contexts = np.array([self.actions[i:i+2*w+1] for i in idx])
+		centers = contexts[:, w] # get the center of each window
+		contexts = np.delete(contexts, w, 1) # remove center indecies
+		
+		
+		return contexts, centers
