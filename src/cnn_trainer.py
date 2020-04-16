@@ -122,6 +122,7 @@ def create_supervised_evaluator(
 	non_blocking: bool = False,
 	output_transform = lambda x, y, y_pred: (y_pred, y,),
 	log_dir='output/log/',
+	checkpoint_dir='output/checkpoints/'
 ) -> Engine:
 
 	if device:
