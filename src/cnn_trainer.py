@@ -45,13 +45,16 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 
 	# Metrics
 	RunningAverage(output_transform=lambda x: x['loss']).attach(engine, 'average_loss')
+	ROC_AUC(
+		output_transform=lambda x: (F.softmax(x['y_pred'], dim=1)[:,1], x['y_true'])
+	).attach(engine, 'roc_auc')
 
 	# TQDM
-	pbar = ProgressBar(
-		persist=True,
-		bar_format='{desc}[{n_fmt}/{total_fmt}] {percentage:8.0f}%|{bar}{postfix} [{elapsed}<{remaining}]',
-	)
-	pbar.attach(engine, ['average_loss'])
+	# pbar = ProgressBar(
+	# 	persist=True,
+	# 	bar_format='{desc}[{n_fmt}/{total_fmt}] {percentage:8.0f}%|{bar}{postfix} [{elapsed}<{remaining}]',
+	# )
+	# pbar.attach(engine, ['average_loss'])
 
 	# Tensorboard logging
 	# scalars logging
@@ -125,16 +128,16 @@ def create_supervised_evaluator(
 	Loss(
 		criterion, output_transform=lambda x: x,
 	).attach(engine, 'loss')
-	Accuracy(
-		# output_transform=lambda x: (x[0].transpose(1,2).contiguous(), x[1].transpose(1,2).contiguous())
-		output_transform=lambda x: ((F.softmax(x[0], dim=1) > 0.5).long(), x[1])
-	).attach(engine, 'accuracy')
+	# Accuracy(
+	# 	# output_transform=lambda x: (x[0].transpose(1,2).contiguous(), x[1].transpose(1,2).contiguous())
+	# 	output_transform=lambda x: ((F.softmax(x[0], dim=1) > 0.5).long(), x[1])
+	# ).attach(engine, 'accuracy')
 	ROC_AUC(
 		output_transform=lambda x: (F.softmax(x[0], dim=1)[:,1], x[1])
 	).attach(engine, 'roc_auc')
 
-	pbar = ProgressBar(persist=True)
-	pbar.attach(engine)
+	# pbar = ProgressBar(persist=True)
+	# pbar.attach(engine)
 
 	# Tensorboard logging
 	tb_logger = TensorboardLogger(log_dir=log_dir + '/validation')
@@ -151,6 +154,6 @@ def create_supervised_evaluator(
 	@engine.on(Events.COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
-		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, ROC AUC: {metrics['roc_auc']:.6f}")
+		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, ROC AUC: {metrics['roc_auc']:.6f}")
 
 	return engine

@@ -78,17 +78,26 @@ class CNN_Classifier(nn.Module):
 		self.seq_length = params['max_seq_length']
 		self.lstm_hidden_size = params['lstm_hidden_size']
 
+		if params.get('activation'):
+			self.activation = params['activation']
+		else:
+			self.activation = nn.ReLU()
+
+		self.apply_batch_norm = params['apply_batch_norm']
+
 		self.conv1 = nn.Conv2d(
 			1,
 			params['conv1_filters'],
 			kernel_size=params['conv1_kernel_size'],
 			padding=params['conv1_kernel_size']//2)
+		self.batch_norm1 = nn.BatchNorm2d(params['conv1_filters'])
 		self.maxpool1 = nn.MaxPool2d(2, stride=2)
 		self.conv2 = nn.Conv2d(
 			params['conv1_filters'],
 			params['conv2_filters'],
 			kernel_size=params['conv2_kernel_size'],
 			padding=params['conv2_kernel_size']//2)
+		self.batch_norm2 = nn.BatchNorm2d(params['conv2_filters'])
 		self.maxpool2 = nn.MaxPool2d(2, stride=2)
 
 		# not nn.Flatten because of compatability issue
@@ -108,8 +117,15 @@ class CNN_Classifier(nn.Module):
 		assert(x.shape[3] == self.lstm_hidden_size)
 
 		x = self.conv1(x)
+		if self.apply_batch_norm:
+			x = self.batch_norm1(x)
+		x = self.activation(x)
 		x = self.maxpool1(x)
+
 		x = self.conv2(x)
+		if self.apply_batch_norm:
+			x = self.batch_norm2(x)
+		x = self.activation(x)
 		x = self.maxpool2(x)
 
 		x = self.flatten(x)
@@ -170,14 +186,9 @@ class SkipGram(nn.Module):
 
 	def __init__(self, vocab_size, embedding_dim):
 		super(SkipGram, self).__init__()
-
-		self.vocab_size = vocab_size
-		self.embedding_dim = embedding_dim
 		
 		self.embed = torch.nn.Embedding(vocab_size, embedding_dim)
 		nn.init.xavier_normal_(self.embed.weight)
-
-		self.eta = 1e-15 # for numeric stability
 
 	def forward(self, x):
 	
@@ -186,25 +197,22 @@ class SkipGram(nn.Module):
 	def _loss(self, batch):
 
 		target, center = batch
-		center = center.long()
-		target = target.long()
+
+		center = torch.from_numpy(center).type(torch.LongTensor).to(device)
+		target = torch.from_numpy(target).type(torch.LongTensor).to(device)
 		
 		center = F.embedding(center, self.embed.weight)
 		target = F.embedding(target, self.embed.weight)
 		
 		# also:
-		# denominator = (center @ self.embed.weight.t()).exp().sum(1)
-		denominator = torch.einsum("ij, kj -> ik", center, self.embed.weight).exp().sum(1)
+		# denominator = (target @ self.embed.weight.t()).exp().sum(2)
+		denominator = torch.einsum("ijk, zk -> ijz", target, self.embed.weight).exp().sum(2)
 		
 		# also:
 		# numerator = torch.matmul(center[:,None], target.permute(0,2,1)).squeeze().exp().sum(1)
 		numerator = torch.einsum('ij, izj -> iz', center, target).exp().sum(1)
 		
-		# it's heavily butchered to solve the problem of negative loss
-		batch_loss = (numerator / denominator + self.eta).mean()
-    
-		if (batch_loss < 0):
-			raise ValueError
+		batch_loss = (numerator[:,None] / denominator).log().sum(1) / (- target.shape[1])
 
 		return batch_loss
 	

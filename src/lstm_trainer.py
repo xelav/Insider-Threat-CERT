@@ -86,10 +86,10 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 	AccuracyIgnoringPadding(ignored_class=0).attach(engine, 'non_pad_accuracy')
 
 	# TQDM
-	pbar = ProgressBar(
-		persist=True,
-	)
-	pbar.attach(engine, ['average_loss'])
+	# pbar = ProgressBar(
+	# 	persist=True,
+	# )
+	# pbar.attach(engine, ['average_loss'])
 
 	# Tensorboard logging
 	tb_logger = TensorboardLogger(log_dir=log_dir + '/train')
@@ -187,8 +187,8 @@ def create_supervised_evaluator_lstm(
 	AccuracyIgnoringPadding(ignored_class=0).attach(engine, 'non_pad_accuracy')
 
 	# TQDM
-	pbar = ProgressBar(persist=True)
-	pbar.attach(engine)
+	# pbar = ProgressBar(persist=True)
+	# pbar.attach(engine)
 
 	# Tensorboard logging
 	tb_logger = TensorboardLogger(log_dir=log_dir + '/validation')
@@ -217,7 +217,7 @@ def create_supervised_evaluator_lstm(
 	@engine.on(Events.COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
-		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, Non-Pad-Accuracy: {metrics['non_pad_accuracy']:.6f}")
+		print(f"Validation Results - Avg loss: {metrics['epoch_loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, Non-Pad-Accuracy: {metrics['non_pad_accuracy']:.6f}")
 
 
 

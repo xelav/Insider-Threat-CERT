@@ -1,4 +1,5 @@
 from pathlib import Path
+import torch.nn as nn
 
 
 def get_params():
@@ -15,6 +16,9 @@ def get_params():
 				# FIXME:
 				'max_seq_length': 200, # implied from seq_len
 				'lstm_hidden_size': 40, 
+
+				'activation': nn.ReLU(), 
+				'apply_batch_norm': False
 			},
 
 			'lstm_encoder': {
