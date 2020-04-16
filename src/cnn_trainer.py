@@ -92,23 +92,23 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 		event_name=Events.ITERATION_COMPLETED(every=tensorboard_every))
 
 	# Checkpoint saving
-	to_save = {'model': model, 'optimizer': optimizer, 'engine': engine}
-	checkpoint_handler = Checkpoint(to_save, DiskSaver(checkpoint_dir, create_dir=True), n_saved=3)
-	final_checkpoint_handler = Checkpoint(
-		{'model': model},
-		DiskSaver(checkpoint_dir, create_dir=True),
-		n_saved=None,
-		filename_prefix='final'
-	)
+	# to_save = {'model': model, 'optimizer': optimizer, 'engine': engine}
+	# checkpoint_handler = Checkpoint(to_save, DiskSaver(checkpoint_dir, create_dir=True), n_saved=3)
+	# final_checkpoint_handler = Checkpoint(
+	# 	{'model': model},
+	# 	DiskSaver(checkpoint_dir, create_dir=True),
+	# 	n_saved=None,
+	# 	filename_prefix='final'
+	# )
 
-	engine.add_event_handler(Events.ITERATION_COMPLETED(every=checkpoint_every), checkpoint_handler)
-	engine.add_event_handler(Events.COMPLETED, final_checkpoint_handler)
+	# engine.add_event_handler(Events.ITERATION_COMPLETED(every=checkpoint_every), checkpoint_handler)
+	# engine.add_event_handler(Events.COMPLETED, final_checkpoint_handler)
 
 	@engine.on(Events.EPOCH_COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
 		print(f"Train Results - Avg loss: {metrics['loss']:.6f}, ROC AUC: {metrics['roc_auc']:.6f}")
-		wandb.log({"train_loss": metrics['loss'], "train_roc_auc": metrics['roc_auc']})
+		wandb.log({"train_loss": metrics['loss'], "train_roc_auc": metrics['roc_auc']}, commit=False)
 
 	return engine
 
@@ -162,11 +162,23 @@ def create_supervised_evaluator(
 		event_name=Events.EPOCH_COMPLETED,
 	)
 
+	# save the best model
+	to_save = {'model': model}
+	best_checkpoint_handler = Checkpoint(
+		to_save,
+		DiskSaver(checkpoint_dir, create_dir=True),
+		n_saved=1, 
+		filename_prefix='best',
+		score_function=lambda x: engine.state.metrics['roc_auc'],
+		score_name="roc_auc",
+		global_step_transform=lambda x, y : engine.train_epoch)
+	engine.add_event_handler(Events.COMPLETED, best_checkpoint_handler)
+
 	@engine.on(Events.COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
 		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, ROC AUC: {metrics['roc_auc']:.6f}")
-		wandb.log({"val_loss": metrics['loss'], "val_roc_auc": metrics['roc_auc']})
+		wandb.log({"val_loss": metrics['loss'], "val_roc_auc": metrics['roc_auc']}, commit=True)
 
 
 	return engine

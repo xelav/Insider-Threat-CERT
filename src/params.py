@@ -1,5 +1,6 @@
 from pathlib import Path
 import torch.nn as nn
+import numpy as np
 
 
 def get_params():
@@ -32,21 +33,29 @@ def get_params():
 
 		'train': {
 
-			'output_dir': Path(r'C:\Users\admin\Google Drive\Datasets\CERT_output'),
-			'answers_dir': Path(r"C:\Users\admin\Google Drive\Datasets\CERT\answers"),
-
 			'lstm_encoder': {
-				'num_epochs': 5,
+				'num_epochs': 200,
 				'learning_rate': 1e-3,
-				'batch_size': 16,
+				'batch_size': 1024,
+
+				'manual_seed': 0,
 			},
 			'cnn_classifier': {
-				'num_epochs': 100,
+				'num_epochs': 500,
 				'learning_rate': 1e-3,
-				'batch_size': 16,
+				'batch_size': 1024,
+
+				'manual_seed': 0,
+
+				'weighting_beta': np.inf # if np.inf means equal weights
+										 # 0.1 will have 1:10.9603 weights
+										 # 1 - 1:1.996
+										 # 10 - 1:1.0906
+										 # ...etc
 			}
 		},
 
+		'min_seq_length': 50,
 		'seq_length': 200,
 
 	}
