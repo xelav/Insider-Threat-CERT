@@ -8,6 +8,8 @@ from ignite.contrib.handlers.tensorboard_logger import *
 from ignite.handlers import Checkpoint, DiskSaver
 from ignite.contrib.metrics import ROC_AUC
 
+import wandb
+
 
 def prepare_batch(batch, device=None, non_blocking=None, num_classes=64):
 
@@ -44,37 +46,40 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 	engine = Engine(_update)
 
 	# Metrics
-	RunningAverage(output_transform=lambda x: x['loss']).attach(engine, 'average_loss')
+	RunningAverage(output_transform=lambda x: x['loss']).attach(engine, 'running_average_loss')
+	Loss(
+		criterion, output_transform=lambda x: (x['y_pred'], x['y_true']),
+	).attach(engine, 'loss')
 	ROC_AUC(
 		output_transform=lambda x: (F.softmax(x['y_pred'], dim=1)[:,1], x['y_true'])
 	).attach(engine, 'roc_auc')
 
 	# TQDM
 	# pbar = ProgressBar(
-	# 	persist=True,
-	# 	bar_format='{desc}[{n_fmt}/{total_fmt}] {percentage:8.0f}%|{bar}{postfix} [{elapsed}<{remaining}]',
-	# )
-	# pbar.attach(engine, ['average_loss'])
+	#	persist=True,
+	#	bar_format='{desc}[{n_fmt}/{total_fmt}] {percentage:8.0f}%|{bar}{postfix} [{elapsed}<{remaining}]',
+	#)
+	#pbar.attach(engine, ['average_loss'])
 
 	# Tensorboard logging
 	# scalars logging
 	tb_logger = TensorboardLogger(log_dir=log_dir + '/train')
-	tb_logger.attach(
-		engine,
-		log_handler=OutputHandler(
-			tag="metrics", output_transform=lambda x: {"batch_loss": x['loss']}, metric_names="all"
-		),
-		event_name=Events.ITERATION_COMPLETED(every=1),
-	)
-	tb_logger.attach(
-		engine,
-		log_handler=OutputHandler(
-			tag="metrics",
-			output_transform=lambda x: {"epoch_loss": x['loss']},
-			global_step_transform=global_step_from_engine(engine),
-		),
-		event_name=Events.EPOCH_COMPLETED,
-	)
+	# tb_logger.attach(
+	# 	engine,
+	# 	log_handler=OutputHandler(
+	# 		tag="metrics", output_transform=lambda x: {"batch_loss": x['loss']}, metric_names="all"
+	# 	),
+	# 	event_name=Events.ITERATION_COMPLETED(every=1),
+	# )
+	# tb_logger.attach(
+	# 	engine,
+	# 	log_handler=OutputHandler(
+	# 		tag="metrics",
+	# 		output_transform=lambda x: {"epoch_loss": x['loss']},
+	# 		global_step_transform=global_step_from_engine(engine),
+	# 	),
+	# 	event_name=Events.EPOCH_COMPLETED,
+	# )
 	# grads logging
 	tb_logger.attach(
 		engine,
@@ -98,6 +103,12 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 
 	engine.add_event_handler(Events.ITERATION_COMPLETED(every=checkpoint_every), checkpoint_handler)
 	engine.add_event_handler(Events.COMPLETED, final_checkpoint_handler)
+
+	@engine.on(Events.EPOCH_COMPLETED)
+	def log_validation_results(engine):
+		metrics = engine.state.metrics
+		print(f"Train Results - Avg loss: {metrics['loss']:.6f}, ROC AUC: {metrics['roc_auc']:.6f}")
+		wandb.log({"train_loss": metrics['loss'], "train_roc_auc": metrics['roc_auc']})
 
 	return engine
 
@@ -155,5 +166,7 @@ def create_supervised_evaluator(
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
 		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, ROC AUC: {metrics['roc_auc']:.6f}")
+		wandb.log({"val_loss": metrics['loss'], "val_roc_auc": metrics['roc_auc']})
+
 
 	return engine

@@ -142,9 +142,14 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 	engine.add_event_handler(Events.COMPLETED, final_checkpoint_handler)
 
 	@engine.on(Events.EPOCH_COMPLETED)
-	def log_validation_results(engine):
+	def log_train_results(engine):
 		metrics = engine.state.metrics
-		print(f"Epoch results - Avg loss: {metrics['average_loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, Non-Pad-Accuracy: {metrics['non_pad_accuracy']:.6f}")
+		print(f"Train Results - Avg loss: {metrics['epoch_loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, Non-Pad-Accuracy: {metrics['non_pad_accuracy']:.6f}")
+		wandb.log({
+			"train_loss": metrics['epoch_loss'],
+			"train_accuracy": metrics['accuracy'],
+			"train_non_pad_accuracy": metrics['non_pad_accuracy']
+			})
 
 	return engine
 
@@ -218,7 +223,10 @@ def create_supervised_evaluator_lstm(
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
 		print(f"Validation Results - Avg loss: {metrics['epoch_loss']:.6f}, Accuracy: {metrics['accuracy']:.6f}, Non-Pad-Accuracy: {metrics['non_pad_accuracy']:.6f}")
-
-
+		wandb.log({
+			"val_loss": metrics['epoch_loss'],
+			"val_accuracy": metrics['accuracy'],
+			"val_non_pad_accuracy": metrics['non_pad_accuracy']
+			})
 
 	return engine
