@@ -18,7 +18,7 @@ def get_params():
 				'max_seq_length': 200, # implied from seq_len
 				'lstm_hidden_size': 40, 
 
-				'activation': nn.ReLU(), # None is linear
+				'activation': 'relu' # None is linear
 				'apply_batch_norm': False,
 				'dropout': 0,
 			},
@@ -36,14 +36,13 @@ def get_params():
 
 			'lstm_encoder': {
 				'num_epochs': 200,
-				'learning_rate': 1e-3,
+				'lr': 1e-3,
 				'batch_size': 1024,
 
 				'manual_seed': 0,
 			},
 			'cnn_classifier': {
 				'num_epochs': 200,
-				'learning_rate': 1e-3,
 				'batch_size': 1024,
 
 				'manual_seed': 0,

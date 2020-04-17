@@ -81,10 +81,16 @@ class CNN_Classifier(nn.Module):
 
 		self.model_params = params
 
-		if params.get('activation'):
-			self.activation = params['activation']
-		else:
+		if params['activation'] == 'relu':
 			self.activation = nn.ReLU()
+		elif params['activation'] == 'tanh':
+			self.activation = nn.Tanh()
+		elif params['activation'] == 'elu':
+			self.activation = nn.ELU()
+		elif params['activation'] == 'leaky_relu':
+			self.activation = nn.LeakyReLU()
+		else:
+			raise ValueError(f"Wrong activation type: {params['activation']}")
 
 		self.apply_batch_norm = params['apply_batch_norm']
 		self.dropout = nn.Dropout(params['dropout'])

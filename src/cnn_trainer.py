@@ -104,16 +104,16 @@ def create_supervised_evaluator(
 	# pbar.attach(engine)
 
 	# save the best model
-	to_save = {'model': model}
-	best_checkpoint_handler = Checkpoint(
-		to_save,
-		DiskSaver(checkpoint_dir, create_dir=True),
-		n_saved=1, 
-		filename_prefix='best',
-		score_function=lambda x: engine.state.metrics['roc_auc'],
-		score_name="roc_auc",
-		global_step_transform=lambda x, y : engine.train_epoch)
-	engine.add_event_handler(Events.COMPLETED, best_checkpoint_handler)
+	# to_save = {'model': model}
+	# best_checkpoint_handler = Checkpoint(
+	# 	to_save,
+	# 	DiskSaver(checkpoint_dir, create_dir=True),
+	# 	n_saved=1, 
+	# 	filename_prefix='best',
+	# 	score_function=lambda x: engine.state.metrics['roc_auc'],
+	# 	score_name="roc_auc",
+	# 	global_step_transform=lambda x, y : engine.train_epoch)
+	# engine.add_event_handler(Events.COMPLETED, best_checkpoint_handler)
 
 	@engine.on(Events.COMPLETED)
 	def log_validation_results(engine):
