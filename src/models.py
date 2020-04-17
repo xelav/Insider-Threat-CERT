@@ -13,6 +13,7 @@ class LSTM_Encoder(nn.Module):
 		super(LSTM_Encoder, self).__init__()
 
 		self.input_size = params['input_size']
+		self.model_params = params
 
 		self.embedding = None
 		lstm_input_size = params['input_size']
@@ -78,12 +79,15 @@ class CNN_Classifier(nn.Module):
 		self.seq_length = params['max_seq_length']
 		self.lstm_hidden_size = params['lstm_hidden_size']
 
+		self.model_params = params
+
 		if params.get('activation'):
 			self.activation = params['activation']
 		else:
 			self.activation = nn.ReLU()
 
 		self.apply_batch_norm = params['apply_batch_norm']
+		self.dropout = nn.Dropout(params['dropout'])
 
 		self.conv1 = nn.Conv2d(
 			1,
@@ -110,6 +114,7 @@ class CNN_Classifier(nn.Module):
 			2)
 		self.softmax = nn.LogSoftmax(dim=1)
 
+
 	def forward(self, x):
 
 		# assert(len(x.shape)==4)
@@ -120,12 +125,14 @@ class CNN_Classifier(nn.Module):
 		if self.apply_batch_norm:
 			x = self.batch_norm1(x)
 		x = self.activation(x)
+		x = self.dropout(x)
 		x = self.maxpool1(x)
 
 		x = self.conv2(x)
 		if self.apply_batch_norm:
 			x = self.batch_norm2(x)
 		x = self.activation(x)
+		x = self.dropout(x)
 		x = self.maxpool2(x)
 
 		x = self.flatten(x)

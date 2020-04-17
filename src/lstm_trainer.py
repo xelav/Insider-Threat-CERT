@@ -208,7 +208,7 @@ def create_supervised_evaluator_lstm(
 	)
 
 	# save the best model
-	to_save = {'model': model}
+	to_save = {'model': model, 'model_params': model.model_params}
 	best_checkpoint_handler = Checkpoint(
 		to_save,
 		DiskSaver(checkpoint_dir, create_dir=True),

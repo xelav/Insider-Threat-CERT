@@ -18,8 +18,9 @@ def get_params():
 				'max_seq_length': 200, # implied from seq_len
 				'lstm_hidden_size': 40, 
 
-				'activation': nn.ReLU(), 
-				'apply_batch_norm': False
+				'activation': nn.ReLU(), # None is linear
+				'apply_batch_norm': False,
+				'dropout': 0,
 			},
 
 			'lstm_encoder': {
@@ -52,6 +53,9 @@ def get_params():
 										 # 1 - 1:1.996
 										 # 10 - 1:1.0906
 										 # ...etc
+				'weight_decay': 0,
+				'lr_annealing': True,
+				'lr': 1e-3,
 			}
 		},
 
