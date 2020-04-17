@@ -42,13 +42,13 @@ def get_params():
 				'manual_seed': 0,
 			},
 			'cnn_classifier': {
-				'num_epochs': 500,
+				'num_epochs': 200,
 				'learning_rate': 1e-3,
 				'batch_size': 1024,
 
 				'manual_seed': 0,
 
-				'weighting_beta': np.inf # if np.inf means equal weights
+				'weighting_beta': np.inf, # if np.inf means equal weights
 										 # 0.1 will have 1:10.9603 weights
 										 # 1 - 1:1.996
 										 # 10 - 1:1.0906

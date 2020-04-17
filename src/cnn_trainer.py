@@ -22,10 +22,6 @@ def prepare_batch(batch, device=None, non_blocking=None, num_classes=64):
 
 def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metrics={},
 		device=None,
-		log_dir='output/log/',
-		checkpoint_dir='output/checkpoints/',
-		checkpoint_every=1000,
-		tensorboard_every=50,
 	) -> Engine:
 
 	def _update(engine, batch):
@@ -61,49 +57,6 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 	#)
 	#pbar.attach(engine, ['average_loss'])
 
-	# Tensorboard logging
-	# scalars logging
-	tb_logger = TensorboardLogger(log_dir=log_dir + '/train')
-	# tb_logger.attach(
-	# 	engine,
-	# 	log_handler=OutputHandler(
-	# 		tag="metrics", output_transform=lambda x: {"batch_loss": x['loss']}, metric_names="all"
-	# 	),
-	# 	event_name=Events.ITERATION_COMPLETED(every=1),
-	# )
-	# tb_logger.attach(
-	# 	engine,
-	# 	log_handler=OutputHandler(
-	# 		tag="metrics",
-	# 		output_transform=lambda x: {"epoch_loss": x['loss']},
-	# 		global_step_transform=global_step_from_engine(engine),
-	# 	),
-	# 	event_name=Events.EPOCH_COMPLETED,
-	# )
-	# grads logging
-	tb_logger.attach(
-		engine,
-		log_handler=GradsScalarHandler(model, reduction=torch.norm, tag="grads"),
-		event_name=Events.ITERATION_COMPLETED(every=tensorboard_every)
-	)
-	tb_logger.attach(
-		engine,
-		log_handler=GradsHistHandler(model, tag="grads"),
-		event_name=Events.ITERATION_COMPLETED(every=tensorboard_every))
-
-	# Checkpoint saving
-	# to_save = {'model': model, 'optimizer': optimizer, 'engine': engine}
-	# checkpoint_handler = Checkpoint(to_save, DiskSaver(checkpoint_dir, create_dir=True), n_saved=3)
-	# final_checkpoint_handler = Checkpoint(
-	# 	{'model': model},
-	# 	DiskSaver(checkpoint_dir, create_dir=True),
-	# 	n_saved=None,
-	# 	filename_prefix='final'
-	# )
-
-	# engine.add_event_handler(Events.ITERATION_COMPLETED(every=checkpoint_every), checkpoint_handler)
-	# engine.add_event_handler(Events.COMPLETED, final_checkpoint_handler)
-
 	@engine.on(Events.EPOCH_COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
@@ -121,7 +74,6 @@ def create_supervised_evaluator(
 	device = None,
 	non_blocking: bool = False,
 	output_transform = lambda x, y, y_pred: (y_pred, y,),
-	log_dir='output/log/',
 	checkpoint_dir='output/checkpoints/'
 ) -> Engine:
 
@@ -150,18 +102,6 @@ def create_supervised_evaluator(
 
 	# pbar = ProgressBar(persist=True)
 	# pbar.attach(engine)
-
-	# Tensorboard logging
-	tb_logger = TensorboardLogger(log_dir=log_dir + '/validation')
-	tb_logger.attach(
-		engine,
-		log_handler=OutputHandler(
-			tag="validation",
-			metric_names="all",
-			global_step_transform=lambda x, y : engine.train_epoch,
-		),
-		event_name=Events.EPOCH_COMPLETED,
-	)
 
 	# save the best model
 	to_save = {'model': model}
