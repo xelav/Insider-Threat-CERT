@@ -60,7 +60,8 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 	@engine.on(Events.EPOCH_COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
-		print(f"Train Results - Avg loss: {metrics['loss']:.6f}, ROC AUC: {metrics['roc_auc']:.6f}")
+		print(f"Epoch {engine.state.epoch} completed!")
+		print(f"{'Train Results':20} - Avg loss: {metrics['loss']:.6f}, ROC AUC: {metrics['roc_auc']:.6f}")
 		wandb.log({"train_loss": metrics['loss'], "train_roc_auc": metrics['roc_auc']}, commit=False)
 
 	return engine
@@ -118,7 +119,7 @@ def create_supervised_evaluator(
 	@engine.on(Events.COMPLETED)
 	def log_validation_results(engine):
 		metrics = engine.state.metrics
-		print(f"Validation Results - Avg loss: {metrics['loss']:.6f}, ROC AUC: {metrics['roc_auc']:.6f}")
+		print(f"{'Validation Results':20} - Avg loss: {metrics['loss']:.6f}, ROC AUC: {metrics['roc_auc']:.6f}")
 		wandb.log({"val_loss": metrics['loss'], "val_roc_auc": metrics['roc_auc']}, commit=True)
 
 

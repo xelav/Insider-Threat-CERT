@@ -42,18 +42,18 @@ def get_params():
 				'manual_seed': 0,
 			},
 			'cnn_classifier': {
-				'num_epochs': 200,
+				'num_epochs': 1000, # since we eploy the early stopping we apply large number of epochs
 				'batch_size': 1024,
 
 				'manual_seed': 0,
 
-				'weighting_beta': np.inf, # if np.inf means equal weights
+				'weighting_beta': 1e3, # if np.inf means equal weights
 										 # 0.1 will have 1:10.9603 weights
 										 # 1 - 1:1.996
 										 # 10 - 1:1.0906
 										 # ...etc
 				'weight_decay': 0,
-				'lr_annealing': True,
+				'lr_annealing': True, # It's hardcoded between 1e-2 and 1e-4
 				'lr': 1e-3,
 			}
 		},
