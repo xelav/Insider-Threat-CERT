@@ -16,17 +16,17 @@ class LSTM_Encoder(nn.Module):
 		self.model_params = params
 
 		self.embedding = None
-		lstm_input_size = params['input_size']
+		self.lstm_input_size = params['input_size']
 		if params['embedding_size'] and params['embedding_size'] > 0:
 			self.embedding = nn.Embedding(params['input_size'],
 				params['embedding_size'],
 				padding_idx=padding_idx)
-			lstm_input_size = params['embedding_size']
+			self.lstm_input_size = params['embedding_size']
 
 		self.one_hot_encoder = F.one_hot
 		
 		self.lstm_encoder = nn.LSTM(
-			lstm_input_size,
+			self.lstm_input_size,
 			params['hidden_size'],
 			num_layers=params['num_layers'],
 			dropout=params['dropout'],
@@ -72,10 +72,10 @@ class LSTM_Encoder_Topics(LSTM_Encoder):
 
 	def __init__(self, params, padding_idx=None):
 		# FIXME: this a very quick and veeery dirty hack for single hardcoded change
-		super(LSTM_Encoder_Topics, self).__init__()
+		super(LSTM_Encoder_Topics, self).__init__(params, padding_idx)
 
 		self.lstm_encoder = nn.LSTM(
-			lstm_input_size + 100, # this one
+			self.lstm_input_size + 100, # this one
 			params['hidden_size'],
 			num_layers=params['num_layers'],
 			dropout=params['dropout'],

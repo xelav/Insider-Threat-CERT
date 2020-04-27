@@ -18,7 +18,7 @@ def get_params():
 				'max_seq_length': 200, # implied from seq_len
 				'lstm_hidden_size': 40, 
 
-				'activation': 'relu' # None is linear
+				'activation': 'relu', # None is linear
 				'apply_batch_norm': False,
 				'dropout': 0,
 			},

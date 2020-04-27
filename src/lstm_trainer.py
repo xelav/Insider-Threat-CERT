@@ -8,6 +8,7 @@ from ignite.contrib.handlers.tensorboard_logger import *
 from ignite.handlers import Checkpoint, DiskSaver
 from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
+import wandb
 
 class AccuracyIgnoringPadding(Accuracy):
 	"""
@@ -70,7 +71,7 @@ def prepare_batch_lstm_content(batch, device=None, non_blocking=None, num_classe
 def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, metrics={},
 		device=None,
 		tensorboard_dir=None,
-		checkpoint_dir='output/checkpoints/',
+		checkpoint_dir=None,
 		checkpoint_every=None,
 		tensorboard_every=50,
 		tqdm_log=False
@@ -100,6 +101,9 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch, m
 	RunningAverage(output_transform=lambda x: x['loss']).attach(engine, 'average_loss')
 	Accuracy().attach(engine, 'accuracy')
 	AccuracyIgnoringPadding(ignored_class=0).attach(engine, 'non_pad_accuracy')
+	Loss(
+		criterion, output_transform=lambda x: (x['y_pred'], x['y']),
+	).attach(engine, 'epoch_loss')
 
 	# TQDM
 	if tqdm_log:
@@ -181,7 +185,7 @@ def create_supervised_evaluator_lstm(
 	device = None,
 	non_blocking: bool = False,
 	output_transform = lambda x, y, y_pred: (y_pred, y,),
-	tensorboard_dir='output/log/',
+	tensorboard_dir=None,
 	tqdm_log=False,
 	checkpoint_dir='output/checkpoints/',
 ) -> Engine:
