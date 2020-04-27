@@ -22,6 +22,7 @@ def prepare_batch(batch, device=None, non_blocking=None, num_classes=64):
 
 def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metrics={},
 		device=None,
+		tqdm_log=False,
 	) -> Engine:
 
 	def _update(engine, batch):
@@ -51,11 +52,12 @@ def create_supervised_trainer(model, optimizer, criterion, prepare_batch, metric
 	).attach(engine, 'roc_auc')
 
 	# TQDM
-	# pbar = ProgressBar(
-	#	persist=True,
-	#	bar_format='{desc}[{n_fmt}/{total_fmt}] {percentage:8.0f}%|{bar}{postfix} [{elapsed}<{remaining}]',
-	#)
-	#pbar.attach(engine, ['average_loss'])
+	if tqdm_log:
+		pbar = ProgressBar(
+			persist=True,
+			bar_format='{desc}[{n_fmt}/{total_fmt}] {percentage:8.0f}%|{bar}{postfix} [{elapsed}<{remaining}]',
+		)
+		pbar.attach(engine, ['average_loss'])
 
 	@engine.on(Events.EPOCH_COMPLETED)
 	def log_validation_results(engine):
@@ -74,6 +76,7 @@ def create_supervised_evaluator(
 	metrics = None,
 	device = None,
 	non_blocking: bool = False,
+	tqdm_log,
 	output_transform = lambda x, y, y_pred: (y_pred, y,),
 	checkpoint_dir='output/checkpoints/'
 ) -> Engine:
@@ -93,16 +96,14 @@ def create_supervised_evaluator(
 	Loss(
 		criterion, output_transform=lambda x: x,
 	).attach(engine, 'loss')
-	# Accuracy(
-	# 	# output_transform=lambda x: (x[0].transpose(1,2).contiguous(), x[1].transpose(1,2).contiguous())
-	# 	output_transform=lambda x: ((F.softmax(x[0], dim=1) > 0.5).long(), x[1])
-	# ).attach(engine, 'accuracy')
 	ROC_AUC(
 		output_transform=lambda x: (F.softmax(x[0], dim=1)[:,1], x[1])
 	).attach(engine, 'roc_auc')
 
-	# pbar = ProgressBar(persist=True)
-	# pbar.attach(engine)
+
+	if tqdm_log:
+		pbar = ProgressBar(persist=True)
+		pbar.attach(engine)
 
 	# save the best model
 	# to_save = {'model': model}

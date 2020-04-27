@@ -66,6 +66,54 @@ class LSTM_Encoder(nn.Module):
 			return x
 		else:
 			return x
+
+
+class LSTM_Encoder_Topics(LSTM_Encoder):
+
+	def __init__(self, params, padding_idx=None):
+		# FIXME: this a very quick and veeery dirty hack for single hardcoded change
+		super(LSTM_Encoder_Topics, self).__init__()
+
+		self.lstm_encoder = nn.LSTM(
+			lstm_input_size + 100, # this one
+			params['hidden_size'],
+			num_layers=params['num_layers'],
+			dropout=params['dropout'],
+			batch_first=True)
+
+	def forward(self, x):
+		"""
+		Input Args:
+		* action_sequence - tensor of indecies with shape (batch_size, seq_len)
+		* content_topics  - 
+		Output:
+		If model in train mode:
+			tensor in shape (batch_size, seq_len-1, input_size)
+		If model in eval mode:
+			tensor in shape (batch_size, seq_len, hidden size)
+		"""
+
+		action_sequence, content_topics = x
+		if self.embedding:
+			x = self.embedding(action_sequence)
+		else:
+			x = self.one_hot_encoder(
+					action_sequence,
+					num_classes=self.input_size
+				).float()
+		x = torch.cat([x.float(), content_topics.float()], dim=2)
+		x, _ = self.lstm_encoder(x)
+
+		if self.training:
+			x = self.dropout(x)
+			x = self.decoder(x)
+			x = self.log_softmax(x)
+
+			# target = self.one_hot_encoder(sequence[:,:-1]).float()
+			# loss = self.loss(x[:,1:], target)
+			return x
+		else:
+			return x
 		
 
 class CNN_Classifier(nn.Module):

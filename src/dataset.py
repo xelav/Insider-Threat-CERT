@@ -6,7 +6,26 @@ import torch
 from torch.utils.data.dataset import Dataset
 from torch.utils.data.sampler import SubsetRandomSampler
 
+from scipy.sparse import csc_matrix
+
 class CertDataset(Dataset):
+
+	@staticmethod
+	def pad_to_length(series, max_length=200, padding_id=0):
+		series = series.apply(lambda x: x[:max_length])
+		series = series.apply(lambda x: x + [padding_id] * (max_length - len(x)))
+		return series
+
+	@staticmethod
+	def pad_topic_matricies(topic_matricies_array, max_length=200):
+
+		# FIXME: not sure if it's correct to do inplace operations inside of function
+		for idx, a in enumerate(topic_matricies_array):
+		    topic_matricies_array[idx] = csc_matrix(
+		    	(a.data, a.indices, a.indptr),
+		    	shape=(max_length, 100)
+		    	)
+		return topic_matricies_array
 
 	@staticmethod
 	def prepare_dataset(pkl_file, answers_csv, min_length, max_length, padding_id=0, dataset_version='4.2'):
@@ -27,22 +46,34 @@ class CertDataset(Dataset):
 		df = df.drop(['start', 'end', 'day', 'user'], axis=1)
 
 		df['action_length'] = df.action_id.apply(len)
-
 		df = df[df.action_length < min_length]
 
-		df['action_id'] = df.action_id.apply(lambda x: x[:max_length])
-		df['action_id'] = df.action_id.apply(lambda x: x + [padding_id] * (max_length - len(x)))
+		df['action_id'] = CertDataset.pad_to_length(df.action_id, max_length=max_length, padding_id=padding_id)
 
 		actions = np.vstack(df.action_id.values)
 		targets = df.malicious.values
 
 		return actions, targets
 
-	def __init__(self, actions, targets, transform=None):
+	@staticmethod
+	def load_prepared_dataset(csv_file, min_length, max_length, remove_holidays, padding_id):
+
+		df = pd.read_csv(csv_file)
+		df = df.drop(['user', 'date', ''])
+
+		df = df[df.action_length < min_length]
+
+		df['action_id'] = CertDataset.pad_to_length(df.action_id, max_length=max_length, padding_id=padding_id)
+
+		return df
+
+	def __init__(self, actions, targets, content_topics=None, transform=None):
 
 		self.actions = actions
 		self.targets = targets.astype(int)
 		self.transform = transform
+		self.content_topics = content_topics
+		
 
 	def __len__(self):
 		return len(self.actions)
@@ -53,6 +84,9 @@ class CertDataset(Dataset):
 			idx = idx.tolist()
 
 		sample = {'actions': self.actions[idx], 'targets': self.targets[idx]}
+
+		if self.content_topics is not None:
+			sample['content_topics'] = self.content_topics[idx].toarray()
 
 		if self.transform:
 			sample = self.transform(sample)
