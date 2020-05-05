@@ -67,24 +67,6 @@ class CertDataset(Dataset):
 
         return actions, targets
 
-    @staticmethod
-    def load_prepared_dataset(
-            csv_file,
-            min_length,
-            max_length,
-            remove_holidays,
-            padding_id):
-
-        df = pd.read_csv(csv_file)
-        df = df.drop(['user', 'date', ''])
-
-        df = df[df.action_length < min_length]
-
-        df['action_id'] = CertDataset.pad_to_length(
-            df.action_id, max_length=max_length, padding_id=padding_id)
-
-        return df
-
     def __init__(self, actions, targets, content_topics=None, transform=None):
 
         self.actions = actions

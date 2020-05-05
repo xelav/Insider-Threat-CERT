@@ -272,7 +272,8 @@ class InsiderClassifier(nn.Module):
                 "ijk, zk -> ijz", target, self.embed.weight).exp().sum(2)
 
             # also:
-            # numerator = torch.matmul(center[:,None], target.permute(0,2,1)).squeeze().exp().sum(1)
+            # numerator = torch.matmul(center[:,None],
+            # target.permute(0,2,1)).squeeze().exp().sum(1)
             numerator = torch.einsum(
                 'ij, izj -> iz', center, target).exp().sum(1)
 
@@ -282,6 +283,9 @@ class InsiderClassifier(nn.Module):
             return batch_loss
 
         def _epoch_train(self, batcher, lr, device):
+        	"""
+			legacy method for
+			"""
 
             optimizer = optim.SGD(self.parameters(), lr=lr)
 
