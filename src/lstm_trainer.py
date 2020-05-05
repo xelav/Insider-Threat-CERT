@@ -43,19 +43,31 @@ def prepare_batch_lstm(
         batch,
         device=None,
         non_blocking=None,
-        num_classes=64, train=True):
+        num_classes=64,
+        train=True):
 
     actions = batch['actions']
     # actions = torch.from_numpy(actions).to(device).to(torch.int64)
     actions = actions.to(device).to(torch.int64)
+
+    topics = None
+    if batch.get('content_topics'):
+        topics = batch['content_topics'].to(device)
     # actions = F.one_hot(actions, num_classes=64).float()
     if train:
-        target = actions[:, 1:]
-        actions = actions[:, :-1]
 
-        return actions, target
+        X = actions[:, :-1]
+        if topics:
+            topics = topics[:, :-1]
+            X = (X, topics)
+        y = actions[:, 1:]
     else:
-        return actions, batch['targets']
+        X = actions
+        if topics:
+            X = (X, topics)
+        y = batch['targets']
+
+    return X, y
 
 
 def prepare_batch_lstm_content(
@@ -118,51 +130,16 @@ def create_supervised_trainer_lstm(model, optimizer, criterion, prepare_batch,
         criterion, output_transform=lambda x: (x['y_pred'], x['y']),
     ).attach(engine, 'epoch_loss')
 
-    # TQDM
-    if tqdm_log:
-        pbar = ProgressBar(
-            persist=True,
-        )
-        pbar.attach(engine, ['average_loss'])
-
-    # Tensorboard logging
-    if tensorboard_dir:
-        tb_logger = TensorboardLogger(log_dir=tensorboard_dir + '/train')
-        tb_logger.attach(
-            engine,
-            log_handler=OutputHandler(
-                tag="train",
-                output_transform=lambda x: {"batch_loss": x['loss']},
-                metric_names=['average_loss'],
-            ),
-            event_name=Events.ITERATION_COMPLETED(every=1),
-        )
-        tb_logger.attach(
-            engine,
-            log_handler=OutputHandler(
-                tag="train",
-                output_transform=lambda x: {"epoch_loss": x['loss']},
-                metric_names=['non_pad_accuracy', 'accuracy'],
-                global_step_transform=global_step_from_engine(engine),
-            ),
-            event_name=Events.EPOCH_COMPLETED,
-        )
-
-        tb_logger.attach(
-            engine,
-            log_handler=GradsScalarHandler(
-                model, reduction=torch.norm, tag="grads"),
-            event_name=Events.ITERATION_COMPLETED(every=tensorboard_every)
-        )
-        tb_logger.attach(
-            engine,
-            log_handler=GradsHistHandler(model, tag="grads"),
-            event_name=Events.ITERATION_COMPLETED(every=tensorboard_every))
-
     # Checkpoint saving
     to_save = {'model': model, 'optimizer': optimizer, 'engine': engine}
-    checkpoint_handler = Checkpoint(to_save, DiskSaver(
-        checkpoint_dir, create_dir=True), n_saved=3)
+    checkpoint_handler = Checkpoint(
+        to_save,
+        DiskSaver(
+            checkpoint_dir,
+            create_dir=True
+        ),
+        global_step_transform=lambda x, y: engine.state.epoch,
+        n_saved=3)
     final_checkpoint_handler = Checkpoint(
         {'model': model},
         DiskSaver(checkpoint_dir, create_dir=True),
@@ -231,24 +208,6 @@ def create_supervised_evaluator_lstm(
     ).attach(engine, 'epoch_loss')
     Accuracy().attach(engine, 'accuracy')
     AccuracyIgnoringPadding(ignored_class=0).attach(engine, 'non_pad_accuracy')
-
-    # TQDM
-    if tqdm_log:
-        pbar = ProgressBar(persist=True)
-        pbar.attach(engine)
-
-    # Tensorboard logging
-    if tensorboard_dir:
-        tb_logger = TensorboardLogger(log_dir=tensorboard_dir + '/validation')
-        tb_logger.attach(
-            engine,
-            log_handler=OutputHandler(
-                tag="validation",
-                metric_names="all",
-                global_step_transform=lambda x, y: engine.train_epoch,
-            ),
-            event_name=Events.EPOCH_COMPLETED,
-        )
 
     # save the best model
     to_save = {'model': model}

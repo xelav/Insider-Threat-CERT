@@ -86,8 +86,7 @@ def create_supervised_evaluator(
         metrics=None,
         device=None,
         non_blocking: bool = False,
-        tqdm_log,
-        output_transform=lambda x, y, y_pred: (y_pred, y,),
+        tqdm_log: bool = False,
         checkpoint_dir='output/checkpoints/'
 ) -> Engine:
 

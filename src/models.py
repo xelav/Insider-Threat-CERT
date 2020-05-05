@@ -283,9 +283,10 @@ class InsiderClassifier(nn.Module):
             return batch_loss
 
         def _epoch_train(self, batcher, lr, device):
-        	"""
-			legacy method for
-			"""
+            """
+            legacy method for training epoch.
+            Lies here just as an example code.
+            """
 
             optimizer = optim.SGD(self.parameters(), lr=lr)
 
