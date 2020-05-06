@@ -201,7 +201,11 @@ class InsiderClassifier(nn.Module):
     def __init__(self, params, lstm_checkpoint):
         super(InsiderClassifier, self).__init__()
 
-        self.lstm_encoder = LSTM_Encoder(params['lstm_encoder'])
+        if params['lstm_encoder']['use_content_topics']:
+            LSTM_model = LSTM_Encoder_Topics
+        else:
+            LSTM_model = LSTM_Encoder
+        self.lstm_encoder = LSTM_model(params['lstm_encoder'])
         self.lstm_encoder.requires_grad = False
         self.lstm_encoder.eval()
         self.load_encoder(lstm_checkpoint)
@@ -221,10 +225,14 @@ class InsiderClassifier(nn.Module):
 
     # FIXME: device
     def load_encoder(self, checkpoint, device='cpu'):
+        state_dict = torch.load(
+            checkpoint,
+            map_location=torch.device(device))
+        if 'model' in state_dict:
+            state_dict = state_dict['model']
+
         self.lstm_encoder.load_state_dict(
-            torch.load(
-                checkpoint,
-                map_location=torch.device(device)),
+            state_dict,
             strict=True
         )
         return self

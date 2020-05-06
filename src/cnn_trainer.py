@@ -15,9 +15,16 @@ def prepare_batch(batch, device=None, non_blocking=None, num_classes=64):
 
     actions = batch['actions']
     actions = actions.to(device).to(torch.int64)
+    X = actions
+
     targets = batch['targets'].to(device).long()
+    y = targets
+
+    if 'content_topics' in batch:
+        topics = batch['content_topics'].to(device)
+        X = (actions, topics)
     # actions = F.one_hot(actions, num_classes=64).float()
-    return actions, targets
+    return X, y
 
 
 def create_supervised_trainer(model,
