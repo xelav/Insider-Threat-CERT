@@ -68,6 +68,13 @@ class LSTM_Encoder(nn.Module):
             return x
 
 
+class AttentionClassifier(nn.Module):
+    
+    def __init__(self, params, padding_idx=0):
+        
+        self.encoder = None
+    
+
 class LSTM_Encoder_Topics(LSTM_Encoder):
 
     def __init__(self, params, padding_idx=None):
