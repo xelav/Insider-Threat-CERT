@@ -17,6 +17,14 @@ class CertDataset(Dataset):
         series = series.apply(
             lambda x: x + [padding_id] * (max_length - len(x)))
         return series
+    
+    @staticmethod
+    def pad_to_length_numpy(series, max_length=200, padding_id=0):
+        series = series.apply(lambda x: x[:max_length])
+        series = series.apply(
+            lambda x: np.concatenate([x, np.ones(max_length - len(x)) * padding_id])
+        )
+        return series
 
     @staticmethod
     def pad_topic_matricies(topic_matricies_array, max_length=200):
@@ -30,6 +38,7 @@ class CertDataset(Dataset):
             )
         return topic_matricies_array
 
+    # this method is deprecated in favor of direct init
     @staticmethod
     def prepare_dataset(
             pkl_file,
@@ -38,7 +47,6 @@ class CertDataset(Dataset):
             max_length,
             padding_id=0,
             dataset_version='4.2'):
-        # TODO: drop weekends and holidays
 
         df = pd.read_pickle(pkl_file)
         df = df.reset_index().dropna()
