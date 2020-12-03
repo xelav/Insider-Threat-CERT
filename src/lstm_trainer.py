@@ -47,24 +47,31 @@ def prepare_batch_lstm(
         train=True):
 
     actions = batch['actions']
-    # actions = torch.from_numpy(actions).to(device).to(torch.int64)
     actions = actions.to(device).to(torch.int64)
 
-    topics = None
-    if batch.get('content_topics'):
+    # prepare additional data
+    topics, conditional_vecs = None, None
+    if batch.get('content_topics') is not None:
         topics = batch['content_topics'].to(device)
-    # actions = F.one_hot(actions, num_classes=64).float()
+    if batch.get('conditional_vecs') is not None:
+        conditional_vecs = batch['conditional_vecs'].to(device).to(torch.float32)
+
+    # TODO: replace tuple with dict
     if train:
 
         X = actions[:, :-1]
-        if topics:
+        if topics is not None:
             topics = topics[:, :-1]
             X = (X, topics)
+        elif conditional_vecs is not None:
+            X = (X, conditional_vecs)
         y = actions[:, 1:]
     else:
         X = actions
-        if topics:
+        if topics is not None:
             X = (X, topics)
+        elif conditional_vecs is not None:
+            X = (X, conditional_vecs)
         y = batch['targets']
 
     return X, y

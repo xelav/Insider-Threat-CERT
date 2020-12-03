@@ -54,6 +54,7 @@ class LSTM_Encoder(nn.Module):
         else:
             x = self.one_hot_encoder(sequence,
                                      num_classes=self.input_size).float()
+            
         x, _ = self.lstm_encoder(x)
 
         if self.training:
@@ -68,11 +69,71 @@ class LSTM_Encoder(nn.Module):
             return x
 
 
-class AttentionClassifier(nn.Module):
-    
-    def __init__(self, params, padding_idx=0):
+class LSTM_Encoder_Numeric(LSTM_Encoder):
+
+    def __init__(self, params, padding_idx=None):
+        super(LSTM_Encoder_Numeric, self).__init__(params, padding_idx)
         
-        self.encoder = None
+        self.conditional_hidden_state_encoder = nn.Linear(
+            params['condition_vec_size'],
+            params['hidden_size']
+        )
+        self.conditional_cell_state_encoder = nn.Linear(
+            params['condition_vec_size'],
+            params['hidden_size']
+        )
+        
+        self.hidden_state_template_tensor = torch.zeros(
+            params['num_layers'],
+            params['hidden_size']
+        )
+
+    def forward(self, x):
+        """
+        Input Args:
+        * x - tuple of (sequence, condition_vec):
+            * sequence - tensor of indecies with shape (batch_size, seq_len)
+            * condition_vec - arbitrary tensor with shape (batch_size, condition_vec_size)
+        Output:
+        If model in train mode:
+                tensor in shape (batch_size, seq_len-1, input_size)
+        If model in eval mode:
+                tensor in shape (batch_size, seq_len, hidden size)
+        """
+
+        sequence, condition_vec = x
+
+        if self.embedding:
+            x = self.embedding(sequence)
+        else:
+            x = self.one_hot_encoder(sequence,
+                                     num_classes=self.input_size).float()
+            
+        initial_h = self.conditional_hidden_state_encoder(condition_vec)
+        initial_c = self.conditional_cell_state_encoder(condition_vec)
+        
+        h_0 = torch.zeros(self.model_params['num_layers'], x.shape[0], self.model_params['hidden_size'])
+        c_0 = torch.zeros(self.model_params['num_layers'], x.shape[0], self.model_params['hidden_size'])
+        # get device from LSTM params
+        device = next(self.lstm_encoder.parameters()).device
+        h_0 = h_0.to(device)
+        c_0 = c_0.to(device)
+        
+        h_0[0,:] = initial_h
+        c_0[0,:] = initial_c
+            
+        x, _ = self.lstm_encoder(x, (h_0, c_0))
+
+        if self.training:
+            x = self.dropout(x)
+            x = self.decoder(x)
+            x = self.log_softmax(x)
+
+            # target = self.one_hot_encoder(sequence[:,:-1]).float()
+            # loss = self.loss(x[:,1:], target)
+            return x
+        else:
+            return x
     
 
 class LSTM_Encoder_Topics(LSTM_Encoder):
@@ -210,6 +271,8 @@ class InsiderClassifier(nn.Module):
 
         if params['lstm_encoder']['use_content_topics']:
             LSTM_model = LSTM_Encoder_Topics
+        elif params['lstm_encoder']['condition_vec_size']:
+            LSTM_model = LSTM_Encoder_Numeric
         else:
             LSTM_model = LSTM_Encoder
         self.lstm_encoder = LSTM_model(params['lstm_encoder'])

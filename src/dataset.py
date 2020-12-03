@@ -75,12 +75,14 @@ class CertDataset(Dataset):
 
         return actions, targets
 
-    def __init__(self, actions, targets, content_topics=None, transform=None):
+    def __init__(self, actions, targets, content_topics=None, transform=None,
+                 conditional_vecs=None):
 
         self.actions = actions
         self.targets = targets.astype(int)
         self.transform = transform
         self.content_topics = content_topics
+        self.conditional_vecs = conditional_vecs
 
     def __len__(self):
         return len(self.actions)
@@ -94,6 +96,9 @@ class CertDataset(Dataset):
 
         if self.content_topics is not None:
             sample['content_topics'] = self.content_topics[idx].toarray()
+            
+        if self.conditional_vecs is not None:
+            sample['conditional_vecs'] = self.conditional_vecs[idx]
 
         if self.transform:
             sample = self.transform(sample)

@@ -23,6 +23,9 @@ def prepare_batch(batch, device=None, non_blocking=None, num_classes=64):
     if 'content_topics' in batch:
         topics = batch['content_topics'].to(device)
         X = (actions, topics)
+    elif 'conditional_vecs' in batch:
+        conditional_vecs = batch['conditional_vecs'].to(device).float()
+        X = (actions, conditional_vecs)
     # actions = F.one_hot(actions, num_classes=64).float()
     return X, y
 
