@@ -38,51 +38,15 @@ class CertDataset(Dataset):
             )
         return topic_matricies_array
 
-    # this method is deprecated in favor of direct init
-    @staticmethod
-    def prepare_dataset(
-            pkl_file,
-            answers_csv,
-            min_length,
-            max_length,
-            padding_id=0,
-            dataset_version='4.2'):
-
-        df = pd.read_pickle(pkl_file)
-        df = df.reset_index().dropna()
-
-        main_df = pd.read_csv(answers_csv)
-        main_df = main_df[main_df['dataset'].astype(str) == str(dataset_version)]\
-            .drop(['dataset', 'details'], axis=1)
-
-        main_df['start'] = pd.to_datetime(
-            main_df['start'], format='%m/%d/%Y %H:%M:%S')
-        main_df['end'] = pd.to_datetime(
-            main_df['end'], format='%m/%d/%Y %H:%M:%S')
-
-        df = df.merge(main_df, left_on='user', right_on='user', how='left')
-        df['malicious'] = (df.day >= df.start) & (df.day <= df.end)
-        df = df.drop(['start', 'end', 'day', 'user'], axis=1)
-
-        df['action_length'] = df.action_id.apply(len)
-        df = df[df.action_length < min_length]
-
-        df['action_id'] = CertDataset.pad_to_length(
-            df.action_id, max_length=max_length, padding_id=padding_id)
-
-        actions = np.vstack(df.action_id.values)
-        targets = df.malicious.values
-
-        return actions, targets
-
     def __init__(self, actions, targets, content_topics=None, transform=None,
-                 conditional_vecs=None):
+                 conditional_vecs=None, positions=None):
 
         self.actions = actions
         self.targets = targets.astype(int)
         self.transform = transform
         self.content_topics = content_topics
         self.conditional_vecs = conditional_vecs
+        self.positions = positions
 
     def __len__(self):
         return len(self.actions)
@@ -93,12 +57,16 @@ class CertDataset(Dataset):
             idx = idx.tolist()
 
         sample = {'actions': self.actions[idx], 'targets': self.targets[idx]}
+        
 
         if self.content_topics is not None:
             sample['content_topics'] = self.content_topics[idx].toarray()
             
         if self.conditional_vecs is not None:
             sample['conditional_vecs'] = self.conditional_vecs[idx]
+
+        if self.positions is not None:
+            sample['positions'] = self.positions[idx]
 
         if self.transform:
             sample = self.transform(sample)
