@@ -36,7 +36,6 @@ class LSTM_Encoder(nn.Module):
             params['hidden_size'],
             params['input_size'])
         self.log_softmax = nn.LogSoftmax(dim=2)
-        # self.loss = nn.NLLLoss()
 
     def forward(self, sequence):
         """
@@ -263,6 +262,35 @@ class CNN_Classifier(nn.Module):
 
         return x
 
+
+class AttentionClassifier(nn.Module):
+    
+    def __init__(self, params):
+        super(AttentionClassifier, self).__init__()
+        
+        self.seq_length = params['max_seq_length']
+        self.lstm_hidden_size = params['lstm_hidden_size']
+        self.hidden_size = params['attention_hidden_size']
+        
+        self.lin = nn.Linear(
+            params['conv2_filters']
+            * self.seq_length
+            * self.lstm_hidden_size
+            // 16,
+            2)
+        
+        context_vector = torch.empty(5, 7)
+        self.context_vector = nn.Parameter(context_vector)
+        
+        
+    def forward(self, h):
+        
+        u = self.lin(h)
+        e = u @ h
+        alpha = F.softmax(e)
+        h = h @ alpha
+        return h
+        
 
 class InsiderClassifier(nn.Module):
 

@@ -6,37 +6,7 @@ from ignite.metrics import Accuracy, Loss, RunningAverage
 from ignite.contrib.handlers.tqdm_logger import ProgressBar
 from ignite.contrib.handlers.tensorboard_logger import *
 from ignite.handlers import Checkpoint, DiskSaver
-from ignite.metrics.metric import reinit__is_reduced
-
 import wandb
-
-
-class AccuracyIgnoringPadding(Accuracy):
-    """
-    Same accuracy metric except that it
-    ignores single class in calculations.
-    This is neccessary so that the metric
-    is not overly optimistic
-    """
-
-    def __init__(self, ignored_class, *args, **kwargs):
-        self.ignored_class = ignored_class
-        super(Accuracy, self).__init__(*args, **kwargs)
-
-    @reinit__is_reduced
-    def update(self, output):
-        y_pred, y = output
-
-        indices = torch.argmax(y_pred, dim=1)
-
-        mask = (y != self.ignored_class)
-        mask &= (indices != self.ignored_class)
-        y = y[mask]
-        indices = indices[mask]
-        correct = torch.eq(indices, y).view(-1)
-
-        self._num_correct += torch.sum(correct).item()
-        self._num_examples += correct.shape[0]
 
 
 def prepare_batch_lstm(
