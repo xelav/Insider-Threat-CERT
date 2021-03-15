@@ -2,11 +2,12 @@ import torch
 import torch.utils.data
 import torch.nn.functional as F
 from ignite.engine import Events, Engine
-from ignite.metrics import Accuracy, Loss, RunningAverage, Metric
+from ignite.metrics import Accuracy, Recall, Precision, Loss, RunningAverage, Metric
 from ignite.contrib.handlers.tqdm_logger import ProgressBar
 from ignite.contrib.handlers.tensorboard_logger import *
 from ignite.handlers import Checkpoint, DiskSaver
 from ignite.contrib.metrics import ROC_AUC
+from .utils import FalsePositiveRate, ModdedPrecision
 
 import wandb
 
@@ -56,6 +57,8 @@ def create_supervised_trainer(model,
     model.to(device)
     engine = Engine(_update)
 
+    softmax_transform = lambda x:\
+        (F.softmax(x['y_pred'], dim=1)[:, 1] > 0.5, x['y_true'])
     # Metrics
     RunningAverage(output_transform=lambda x: x['loss'])\
         .attach(engine, 'running_average_loss')
@@ -63,9 +66,17 @@ def create_supervised_trainer(model,
         criterion, output_transform=lambda x: (x['y_pred'], x['y_true']),
     ).attach(engine, 'loss')
     ROC_AUC(
-        output_transform=lambda x:
-        (F.softmax(x['y_pred'], dim=1)[:, 1], x['y_true'])
+        output_transform=lambda x: (F.softmax(x['y_pred'], dim=1)[:, 1], x['y_true'])
     ).attach(engine, 'roc_auc')
+    ModdedPrecision(
+        output_transform=softmax_transform
+    ).attach(engine, 'precision')
+    Recall(
+        output_transform=softmax_transform
+    ).attach(engine, 'recall')
+    FalsePositiveRate(
+        output_transform=softmax_transform
+    ).attach(engine, 'FPR')
 
     # TQDM
     if tqdm_log:
@@ -80,10 +91,17 @@ def create_supervised_trainer(model,
         print(f"Epoch {engine.state.epoch} completed!")
         print(f"{'Train Results':20} - "
               f"Avg loss: {metrics['loss']:.6f}, "
-              f"ROC AUC: {metrics['roc_auc']:.6f}")
+              f"ROC AUC: {metrics['roc_auc']:.6f}\n\t"
+              f"Recall: {metrics['recall']:.6f} "
+              f"Precision: {metrics['precision']:.6f} "
+              f"FPR: {metrics['FPR']:.6f} "
+              )
         wandb.log({
             "train_loss": metrics['loss'],
-            "train_roc_auc": metrics['roc_auc']
+            "train_roc_auc": metrics['roc_auc'],
+            "train_recall": metrics['recall'],
+            "train_precision": metrics['precision'],
+            "train_fpr": metrics['FPR']
         }, commit=False)
 
     return engine
@@ -113,12 +131,23 @@ def create_supervised_evaluator(
 
     engine = Engine(_inference)
 
+    softmax_transform = lambda x:\
+        (F.softmax(x[0], dim=1)[:, 1] > 0.5, x[1])
     Loss(
         criterion, output_transform=lambda x: x,
     ).attach(engine, 'loss')
     ROC_AUC(
         output_transform=lambda x: (F.softmax(x[0], dim=1)[:, 1], x[1])
     ).attach(engine, 'roc_auc')
+    ModdedPrecision(
+        output_transform=softmax_transform
+    ).attach(engine, 'precision')
+    Recall(
+        output_transform=softmax_transform
+    ).attach(engine, 'recall')
+    FalsePositiveRate(
+        output_transform=softmax_transform
+    ).attach(engine, 'FPR')
 
     if tqdm_log:
         pbar = ProgressBar(persist=True)
@@ -139,12 +168,22 @@ def create_supervised_evaluator(
     @engine.on(Events.COMPLETED)
     def log_validation_results(engine):
         metrics = engine.state.metrics
+        if len(metrics) == 0:
+            print('no metrics in log_validation_results!')
+            return
         print(f"{'Validation Results':20} - "
               f"Avg loss: {metrics['loss']:.6f}, "
-              f"ROC AUC: {metrics['roc_auc']:.6f}")
+              f"ROC AUC: {metrics['roc_auc']:.6f}\n\t"
+              f"Recall: {metrics['recall']:.6f} "
+              f"Precision: {metrics['precision']:.6f} "
+              f"FPR: {metrics['FPR']:.6f} "
+              )
         wandb.log({
             "val_loss": metrics['loss'],
-            "val_roc_auc": metrics['roc_auc']
+            "val_roc_auc": metrics['roc_auc'],
+            "val_recall": metrics['recall'],
+            "val_precision": metrics['precision'],
+            "val_fpr": metrics['FPR']
         }, commit=True)
 
     return engine
