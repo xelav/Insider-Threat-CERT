@@ -1,4 +1,5 @@
 import math
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,11 +7,12 @@ import torch.nn.functional as F
 from ignite.metrics.metric import reinit__is_reduced, sync_all_reduce
 from ignite.metrics import Metric
 from ignite.exceptions import NotComputableError
+from ignite.metrics import Accuracy, Precision
 
     
 class FalsePositiveRate(Metric):
 
-    def __init__(self, ignored_class, output_transform=lambda x: x, device="cpu"):
+    def __init__(self, output_transform=lambda x: x, device="cpu"):
         self._false_positive_num = None
         self._num_examples = None
         super(FalsePositiveRate, self).__init__(output_transform=output_transform, device=device)
@@ -24,17 +26,40 @@ class FalsePositiveRate(Metric):
     @reinit__is_reduced
     def update(self, output):
         y_pred, y = output
-        y_pred, y = y_pred.numpy(), y.numpy()
+        y_pred, y = y_pred.cpu().numpy(), y.cpu().numpy()
         
         self._false_positive_num += np.logical_and(y_pred != y, y_pred == 1).sum()
         self._num_examples += (y == 0).sum()
 
-    @sync_all_reduce("_num_examples", "_false_positive_num")
+    # @sync_all_reduce("_num_examples", "_false_positive_num")
     def compute(self):
         if self._num_examples == 0:
             raise NotComputableError('FalsePositiveRate must have at least one example before it can be computed.')
         return self._false_positive_num/ self._num_examples
 
+
+from typing import cast
+class ModdedPrecision(Precision):
+    """
+
+    """
+    def compute(self):
+        is_scalar = not isinstance(self._positives, torch.Tensor) or self._positives.ndim == 0
+        if is_scalar and self._positives == 0:
+            return -1
+
+        if not (self._type == "multilabel" and not self._average):
+            if not self._is_reduced:
+                self._true_positives = idist.all_reduce(self._true_positives)  # type: ignore[assignment]
+                self._positives = idist.all_reduce(self._positives)  # type: ignore[assignment]
+                self._is_reduced = True  # type: bool
+
+        result = self._true_positives / (self._positives + self.eps)
+
+        if self._average:
+            return cast(torch.Tensor, result).mean().item()
+        else:
+            return result
 
 class AccuracyIgnoringPadding(Accuracy):
     """
