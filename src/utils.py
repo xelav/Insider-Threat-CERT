@@ -39,6 +39,7 @@ class FalsePositiveRate(Metric):
 
 
 from typing import cast
+import ignite.distributed as idist
 class ModdedPrecision(Precision):
     """
 

@@ -8,6 +8,8 @@ from ignite.contrib.handlers.tensorboard_logger import *
 from ignite.handlers import Checkpoint, DiskSaver
 import wandb
 
+from .utils import AccuracyIgnoringPadding
+
 
 def prepare_batch_lstm(
         batch,

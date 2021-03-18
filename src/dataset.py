@@ -7,6 +7,7 @@ from torch.utils.data.dataset import Dataset
 from torch.utils.data.sampler import SubsetRandomSampler
 
 from scipy.sparse import csc_matrix
+from sklearn.model_selection import StratifiedShuffleSplit
 
 
 class CertDataset(Dataset):
@@ -79,16 +80,25 @@ def create_data_loaders(
         shuffle_dataset=True,
         validation_split=0.3,
         batch_size=16,
-        random_seed=0):
+        random_seed=0,
+        stratify=None):
 
-    # Creating data indices for training and validation splits:
-    dataset_size = len(dataset)
-    indices = list(range(dataset_size))
-    split = int(np.floor(validation_split * dataset_size))
-    if shuffle_dataset:
-        np.random.seed(random_seed)
-        np.random.shuffle(indices)
-    train_indices, val_indices = indices[split:], indices[:split]
+    # Creating data indices for training and validation splits
+    if stratify is not None:
+        assert shuffle_dataset, "Stratified split should be suffled. Set shuffle_dataset=True"
+        splitter = StratifiedShuffleSplit(n_splits=2,
+                                        random_state=random_seed,
+                                        test_size=validation_split)
+        splitter.get_n_splits()
+        train_indices, val_indices = next(splitter.split(dataset, stratify))
+    else:
+        dataset_size = len(dataset)
+        indices = list(range(dataset_size))
+        split = int(np.floor(validation_split * dataset_size))
+        if shuffle_dataset:
+            np.random.seed(random_seed)
+            np.random.shuffle(indices)
+        train_indices, val_indices = indices[split:], indices[:split]
 
     # Creating PT data samplers and loaders:
     train_sampler = SubsetRandomSampler(train_indices)
